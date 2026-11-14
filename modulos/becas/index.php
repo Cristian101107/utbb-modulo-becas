@@ -57,7 +57,7 @@ cabecera('Catálogo de Becas y Apoyos', '', 'css/modulo.css');
 
       <div class="rejilla">
         <!-- Tarjeta 1 -->
-        <a class="tarjeta bec-tarjeta" href="ficha.php">
+        <a class="tarjeta bec-tarjeta" href="ficha.php?id=academica">
           <div class="tarjeta__cuerpo">
             <span class="bec-etiqueta-tipo">Beca Institucional</span>
             <h3 class="tarjeta__titulo">Beca Académica</h3>
@@ -71,7 +71,7 @@ cabecera('Catálogo de Becas y Apoyos', '', 'css/modulo.css');
         </a>
 
         <!-- Tarjeta 2 -->
-        <a class="tarjeta bec-tarjeta" href="ficha.php">
+        <a class="tarjeta bec-tarjeta" href="ficha.php?id=socioeconomica">
           <div class="tarjeta__cuerpo">
             <span class="bec-etiqueta-tipo">Beca Institucional</span>
             <h3 class="tarjeta__titulo">Beca Socioeconómica</h3>
@@ -85,7 +85,7 @@ cabecera('Catálogo de Becas y Apoyos', '', 'css/modulo.css');
         </a>
 
         <!-- Tarjeta 3 -->
-        <a class="tarjeta bec-tarjeta" href="ficha.php">
+        <a class="tarjeta bec-tarjeta" href="ficha.php?id=extracurricular">
           <div class="tarjeta__cuerpo">
             <span class="bec-etiqueta-tipo">Beca Institucional</span>
             <h3 class="tarjeta__titulo">Apoyo Extracurricular</h3>
@@ -99,7 +99,7 @@ cabecera('Catálogo de Becas y Apoyos', '', 'css/modulo.css');
         </a>
 
         <!-- Tarjeta 4 -->
-        <a class="tarjeta bec-tarjeta" href="ficha.php">
+        <a class="tarjeta bec-tarjeta" href="ficha.php?id=alimenticia">
           <div class="tarjeta__cuerpo">
             <span class="bec-etiqueta-tipo">Beca Institucional</span>
             <h3 class="tarjeta__titulo">Beca Alimenticia</h3>
@@ -113,7 +113,7 @@ cabecera('Catálogo de Becas y Apoyos', '', 'css/modulo.css');
         </a>
 
         <!-- Tarjeta 5 -->
-        <a class="tarjeta bec-tarjeta" href="ficha.php">
+        <a class="tarjeta bec-tarjeta" href="ficha.php?id=federal">
           <div class="tarjeta__cuerpo">
             <span class="bec-etiqueta-tipo">Programa Federal</span>
             <h3 class="tarjeta__titulo">Jóvenes Escribiendo el Futuro</h3>
