@@ -48,8 +48,11 @@ cabecera('Catálogo de Becas y Apoyos', '', 'css/modulo.css');
         </select>
       </div>
 
-      <button class="boton boton--primario boton--bloque" type="submit">Aplicar filtros</button>
-    </form>
+  <button class="boton boton--primario boton--bloque" type="submit">Aplicar filtros</button>
+    <a class="boton boton--secundario boton--bloque mt-4" href="seguimiento.php">
+      Seguimiento de solicitud
+    </a>
+  </form>
 
     <!-- Rejilla de tarjetas de becas -->
     <div>
