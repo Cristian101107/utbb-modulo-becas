@@ -95,3 +95,25 @@
   font-size: var(--t-sm, 0.9rem);
   color: var(--tinta-suave);
 }
+
+/* ==========================================================================
+   MÓDULO BECAS · Postulación (solicitar.php)
+   ========================================================================== */
+
+/* El formulario de postulación necesita más ancho que el .formulario base */
+.bec-formulario {
+  max-width: 760px;
+}
+
+/* Campos en fila: 1 columna en celular, varias desde tablet */
+.bec-fila {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0 var(--e4);
+}
+
+@media (min-width: 600px) {
+  .bec-fila {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+}
