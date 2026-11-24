@@ -1,6 +1,6 @@
 <?php
 /**
- * MÓDULO BECAS · Baja individual y depuración por lote
+ * MÓDULO BECAS · Baja individual y eliminación por lote
  * Explorador Vocacional UTBB
  */
 
@@ -48,7 +48,7 @@ $borrarArchivoSeguro = static function (?string $nombreArchivo): void {
 };
 
 /* =========================================================================
-   CASO A: Eliminación masiva por lote (desde eliminacion.php)
+   CASO A: Eliminación masiva por lote (desde depuracion.php)
    ========================================================================= */
 if ($accion === 'eliminar_lote') {
     $rawSeleccion = is_array($_POST['seleccionados'] ?? null) ? $_POST['seleccionados'] : [];
@@ -59,7 +59,7 @@ if ($accion === 'eliminar_lote') {
     );
 
     if (empty($idsSeleccionados)) {
-        mensaje('alerta', 'Selecciona al menos un registro vencido para depurar.');
+        mensaje('alerta', 'Selecciona al menos un registro vencido para eliminar.');
         redirigir($rutaRetorno);
     }
 

@@ -125,7 +125,7 @@ cabecera('Panel · Becas y apoyos', '', '../css/modulo.css');
     <h1 class="sin-margen">Convocatorias de becas</h1>
     <nav class="becas-herramientas" aria-label="Acciones del gestor">
       <a class="boton boton--secundario" href="<?= RUTA_BASE ?>/panel.php">← Volver al panel</a>
-      <a class="boton boton--secundario" href="depuracion.php">Depuración</a>
+      <a class="boton boton--secundario" href="depuracion.php">Eliminación</a>
       <a class="boton boton--primario" href="editar.php">Nueva convocatoria</a>
     </nav>
   </header>

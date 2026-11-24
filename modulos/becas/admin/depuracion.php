@@ -1,6 +1,6 @@
 <?php
 /**
- * MÓDULO BECAS · Depuración de convocatorias y expedientes vencidos
+ * MÓDULO BECAS · Eliminación de convocatorias y expedientes vencidos
  * Explorador Vocacional UTBB
  */
 
@@ -101,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $alerta = [
                 'tipo' => 'error',
                 'titulo' => 'Identificador no válido',
-                'texto' => 'El registro indicado no existe o no es elegible para depuración.',
+                'texto' => 'El registro indicado no existe o no es elegible para eliminación.',
             ];
         }
     } elseif ($accion === 'eliminar_lote') {
@@ -117,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $alerta = [
                 'tipo' => 'alerta',
                 'titulo' => 'Sin selección válida',
-                'texto' => 'Selecciona al menos un registro vencido en la tabla para ejecutar la depuración masiva.',
+                'texto' => 'Selecciona al menos un registro vencido en la tabla para ejecutar la eliminación masiva.',
             ];
         } else {
             $eliminados = 0;
@@ -155,7 +155,7 @@ foreach ($registrosHistoricos as $item) {
     $candidatos[] = $item;
 }
 
-cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
+cabecera('Eliminación · Becas y apoyos', '', '../css/modulo.css');
 ?>
 
 <section class="contenedor seccion">
@@ -164,12 +164,12 @@ cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
     <ol class="migas">
       <li><a href="<?= RUTA_BASE ?>/panel.php">Panel</a></li>
       <li><a href="index.php">Becas y apoyos</a></li>
-      <li>Depuración</li>
+      <li>Eliminación</li>
     </ol>
   </nav>
 
   <header class="fila fila--separada mb-6">
-    <h1 class="sin-margen">Depuración de becas y expedientes</h1>
+    <h1 class="sin-margen">Eliminación de becas y expedientes por eliminación</h1>
     <a class="boton boton--secundario" href="index.php">Volver al listado</a>
   </header>
 
@@ -192,7 +192,7 @@ cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
       </p>
 
       <p class="campo sin-margen becas-campo-busqueda">
-        <label class="campo__etiqueta" for="estado">Motivo de depuración</label>
+        <label class="campo__etiqueta" for="estado">Motivo de eliminación</label>
         <select class="campo__control" id="estado" name="estado">
           <option value="">Todos los vencidos o resueltos</option>
           <option value="cerrada" <?= $filtroEstado === 'cerrada' ? 'selected' : '' ?>>Convocatorias cerradas</option>
@@ -208,7 +208,7 @@ cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
   <?php if (empty($candidatos)): ?>
 
     <article class="vacio">
-      <h2>Sin registros por depurar</h2>
+      <h2>Sin registros por eliminar</h2>
       <p class="ancho-lectura">No hay convocatorias ni expedientes que superen los <?= (int) $diasRetencion ?> días de antigüedad con este criterio.</p>
     </article>
 
@@ -225,7 +225,7 @@ cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
         <p class="sin-margen">
           <strong><?= count($candidatos) ?></strong> registro(s) con &ge; <?= (int) $diasRetencion ?> días vencidos.
         </p>
-        <button class="boton boton--peligro boton--pequeno" type="submit">Depurar seleccionados</button>
+        <button class="boton boton--peligro boton--pequeno" type="submit">Eliminar seleccionados</button>
       </header>
 
       <figure class="tabla-envoltura sin-margen">
@@ -247,7 +247,7 @@ cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
               <tr>
                 <td class="beca-col-check">
                   <input type="checkbox" name="seleccionados[]" value="<?= (int) $item['id'] ?>"
-                         class="check-depuracion" aria-label="Seleccionar <?= e($item['titulo']) ?>">
+                         class="check-eliminacion" aria-label="Seleccionar <?= e($item['titulo']) ?>">
                 </td>
                 <td>
                   <strong><?= e($item['titulo']) ?></strong><br>
@@ -304,7 +304,7 @@ cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
 
 <script>
 document.getElementById('seleccionar-todos')?.addEventListener('change', function (e) {
-  document.querySelectorAll('.check-depuracion').forEach(function (chk) {
+  document.querySelectorAll('.check-eliminacion').forEach(function (chk) {
     chk.checked = e.target.checked;
   });
 });
