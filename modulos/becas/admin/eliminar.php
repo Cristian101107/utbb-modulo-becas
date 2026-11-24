@@ -28,10 +28,10 @@ $origen = (string) post('origen');
 
 // Construye la ruta de retorno segura (evita Open Redirect)
 $rutaRetorno = 'index.php';
-if ($origen === 'depuracion') {
+if ($origen === 'eliminar') {
     $dias   = entero(post('dias_actuales')) ?? 60;
     $estado = preg_replace('/[^a-z_]/', '', (string) post('estado_actual'));
-    $rutaRetorno = 'depuracion.php?dias=' . $dias . ($estado !== '' ? '&estado=' . urlencode($estado) : '');
+    $rutaRetorno = 'eliminar.php?dias=' . $dias . ($estado !== '' ? '&estado=' . urlencode($estado) : '');
 }
 
 // Función auxiliar para borrar archivos adjuntos sin riesgo de Path Traversal
@@ -48,9 +48,9 @@ $borrarArchivoSeguro = static function (?string $nombreArchivo): void {
 };
 
 /* =========================================================================
-   CASO A: Depuración masiva por lote (desde depuracion.php)
+   CASO A: Eliminación masiva por lote (desde eliminacion.php)
    ========================================================================= */
-if ($accion === 'purgar_lote') {
+if ($accion === 'eliminar_lote') {
     $rawSeleccion = is_array($_POST['seleccionados'] ?? null) ? $_POST['seleccionados'] : [];
     $idsSeleccionados = array_slice(
         array_values(array_filter(array_map('intval', $rawSeleccion), static fn(int $i): bool => $i > 0)),
@@ -86,14 +86,14 @@ if ($accion === 'purgar_lote') {
             $eliminados++;
         }
 
-        mensaje('exito', "Depuración completada: se eliminaron {$eliminados} registro(s) y sus archivos asociados.");
+        mensaje('exito', "Eliminación completada: se eliminaron {$eliminados} registro(s) y sus archivos asociados.");
     } catch (PDOException $e) {
-        error_log('Error en depuración por lote: ' . $e->getMessage());
-        mensaje('error', 'Algunos registros tienen información vinculada y no pudieron purgarse.');
+        error_log('Error en eliminación por lote: ' . $e->getMessage());
+        mensaje('error', 'Algunos registros tienen información vinculada y no pudieron eliminarse.');
     } catch (Throwable $e) {
         // Simulación mientras no exista la tabla SQL
         $total = count($idsSeleccionados);
-        mensaje('exito', "Depuración simulada: {$total} registro(s) purgado(s) (sin base de datos).");
+        mensaje('exito', "Eliminación simulada: {$total} registro(s) eliminado(s) (sin base de datos).");
     }
 
     redirigir($rutaRetorno);
@@ -130,7 +130,7 @@ try {
     $borrarArchivoSeguro($registro['imagen'] ?? null);
     $borrarArchivoSeguro($registro['archivo'] ?? null);
 
-    mensaje('exito', $origen === 'depuracion' ? 'Registro y archivos depurados.' : 'Convocatoria eliminada.');
+    mensaje('exito', $origen === 'eliminar' ? 'Registro y archivos eliminados.' : 'Convocatoria eliminada.');
 } catch (PDOException $e) {
     // Por ejemplo, cuando otra tabla lo referencia con ON DELETE RESTRICT.
     error_log('Error al eliminar: ' . $e->getMessage());
