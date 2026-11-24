@@ -3,14 +3,12 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../nucleo/comun.php';
 
-/* ---------------------------------------------------------------------------
-   Integrante 2 · Postulación
-   Pantalla de registro y envío de solicitud del estudiante.
-   Sin base de datos: se reciben los datos por $_POST y se muestra la
-   alerta de confirmación. El guardado real se conecta después.
-   ------------------------------------------------------------------------ */
+// 1. Acceso: solo el rol aspirante puede postular
+requerir_rol('aspirante');
 
-// Becas disponibles (mismos id que usa ficha.php en ?id=)
+// Integrante 2 · Postulación. Sin base de datos: la solicitud aún no se registra; los documentos sí se guardan en uploads/.
+
+// 2. Catálogos y valores iniciales
 $becas = [
     'academica'       => 'Beca Académica',
     'socioeconomica'  => 'Beca Socioeconómica',
@@ -21,104 +19,152 @@ $becas = [
 
 $carreras = ['TI', 'Mercadotecnia', 'Negocios', 'Mantenimiento Industrial', 'Gastronomía', 'Turismo', 'Otra'];
 
-// Beca preseleccionada si el alumno llega desde la ficha (?id=...)
 $idBeca = get('id', 'academica');
 if (!isset($becas[$idBeca])) {
     $idBeca = 'academica';
 }
 
 $errores = [];
+$errorGeneral = '';
 $enviado = false;
 $folio   = '';
 
-// Valores del formulario (se conservan si hay errores)
 $datos = [
     'beca'      => $idBeca,
-    'nombre'    => '',
+    'nombre'    => (string)(usuario()['nombre'] ?? ''),
     'matricula' => '',
-    'correo'    => '',
+    'correo'    => (string)(usuario()['correo'] ?? ''),
     'telefono'  => '',
     'carrera'   => '',
     'cuatri'    => '',
     'promedio'  => '',
     'motivo'    => '',
 ];
+$acepta = false;
 
-// Documentos que se piden. Solo se validan; NO se guardan en el servidor.
+// Documentos requeridos: se guardan en uploads/ con nombre generado por el servidor.
 $documentos = [
     'doc_identificacion' => 'identificación o credencial',
     'doc_kardex'         => 'kardex o constancia de calificaciones',
 ];
 $tiposDocs = ['application/pdf', 'image/jpeg', 'image/png'];
 
+// 3. Resultado de un envío anterior (POST-Redirect-GET)
+if (isset($_SESSION['bec_envio']) && is_array($_SESSION['bec_envio'])) {
+    $datos['beca']   = (string)($_SESSION['bec_envio']['beca'] ?? $idBeca);
+    $datos['correo'] = (string)($_SESSION['bec_envio']['correo'] ?? '');
+    $folio           = (string)($_SESSION['bec_envio']['folio'] ?? '');
+    $enviado         = isset($becas[$datos['beca']]) && $folio !== '';
+    unset($_SESSION['bec_envio']);
+}
+
+// 4. Procesamiento del formulario
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    verificar_token();
+    // Si el envío supera post_max_size, PHP vacía $_POST y $_FILES
+    if ($_POST === [] && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+        $errorGeneral = 'El envío supera el tamaño que el servidor permite recibir. Cada documento debe pesar máximo 2 MB; vuelve a llenar el formulario.';
+    } else {
+        verificar_token();
 
-    foreach ($datos as $campo => $_) {
-        $datos[$campo] = post($campo);
-    }
-    $acepta = post('acepto') === '1';
-
-    // --- Validación ---
-    if (!isset($becas[$datos['beca']])) {
-        $errores['beca'] = 'Selecciona una beca válida.';
-    }
-    if ($datos['nombre'] === '' || mb_strlen($datos['nombre']) < 5) {
-        $errores['nombre'] = 'Escribe tu nombre completo.';
-    }
-    // Formato: iniciales de la carrera (cualquiera, 1 a 5 letras), guion opcional y dígitos (ej. TI-2201044); también solo dígitos
-    $datos['matricula'] = strtoupper($datos['matricula']);
-    if (!preg_match('/^([A-Z]{1,5}-?)?[0-9]{6,10}$/', $datos['matricula'])) {
-        $errores['matricula'] = 'Escribe tu matrícula con las iniciales de tu carrera y tus números (ej. TI-2201044).';
-    }
-    if (!filter_var($datos['correo'], FILTER_VALIDATE_EMAIL)) {
-        $errores['correo'] = 'Escribe un correo electrónico válido.';
-    }
-    if ($datos['telefono'] !== '' && !preg_match('/^[0-9 +()-]{10,18}$/', $datos['telefono'])) {
-        $errores['telefono'] = 'Escribe un teléfono de 10 dígitos.';
-    }
-    if (!in_array($datos['carrera'], $carreras, true)) {
-        $errores['carrera'] = 'Selecciona tu carrera.';
-    }
-    $cuatri = entero($datos['cuatri']);
-    if ($cuatri === null || $cuatri < 2 || $cuatri > 11) {
-        $errores['cuatri'] = 'Indica tu cuatrimestre (a partir del 2.º).';
-    }
-    if (!is_numeric($datos['promedio']) || (float)$datos['promedio'] < 0 || (float)$datos['promedio'] > 10) {
-        $errores['promedio'] = 'Escribe un promedio entre 0 y 10.';
-    }
-    if (mb_strlen($datos['motivo']) < 20) {
-        $errores['motivo'] = 'Cuéntanos tu motivo en al menos 20 caracteres.';
-    }
-
-    // Documentos: solo se valida que lleguen, su tamaño y su tipo real. No se guardan.
-    foreach ($documentos as $input => $nombreDoc) {
-        $archivo = $_FILES[$input] ?? null;
-
-        if ($archivo === null || $archivo['error'] === UPLOAD_ERR_NO_FILE) {
-            $errores[$input] = 'Adjunta tu ' . $nombreDoc . ' (PDF, JPG o PNG).';
-        } elseif ($archivo['error'] !== UPLOAD_ERR_OK || $archivo['size'] > 2 * 1024 * 1024) {
-            $errores[$input] = 'El archivo no se pudo recibir o pesa más de 2 MB.';
-        } elseif (!in_array((new finfo(FILEINFO_MIME_TYPE))->file($archivo['tmp_name']), $tiposDocs, true)) {
-            $errores[$input] = 'El archivo debe ser PDF, JPG o PNG.';
+        foreach ($datos as $campo => $_) {
+            $datos[$campo] = post($campo);
         }
-    }
+        $acepta = post('acepto') === '1';
 
-    if (!$acepta) {
-        $errores['acepto'] = 'Debes confirmar que tus datos son verídicos.';
-    }
+        // Validación de campos
+        if (!isset($becas[$datos['beca']])) {
+            $errores['beca'] = 'Selecciona una beca válida.';
+        }
+        if ($datos['nombre'] === '' || mb_strlen($datos['nombre']) < 5) {
+            $errores['nombre'] = 'Escribe tu nombre completo.';
+        }
+        $datos['matricula'] = strtoupper($datos['matricula']);
+        if (!preg_match('/^([A-Z]{1,5}-?)?[0-9]{6,10}$/', $datos['matricula'])) {
+            $errores['matricula'] = 'Escribe tu matrícula con las iniciales de tu carrera y tus números (ej. TI-2201044).';
+        }
+        if (!filter_var($datos['correo'], FILTER_VALIDATE_EMAIL)) {
+            $errores['correo'] = 'Escribe un correo electrónico válido.';
+        }
+        if ($datos['telefono'] !== '' && (
+                !preg_match('/^[0-9 ()-]+$/', $datos['telefono'])
+                || strlen(preg_replace('/\D/', '', $datos['telefono'])) !== 10
+            )) {
+            $errores['telefono'] = 'Escribe un teléfono de 10 dígitos.';
+        }
+        if (!in_array($datos['carrera'], $carreras, true)) {
+            $errores['carrera'] = 'Selecciona tu carrera.';
+        }
+        $cuatri = entero($datos['cuatri']);
+        if ($cuatri === null || $cuatri < 2 || $cuatri > 11) {
+            $errores['cuatri'] = 'Indica tu cuatrimestre (a partir del 2.º).';
+        }
+        if (!is_numeric($datos['promedio']) || (float)$datos['promedio'] < 0 || (float)$datos['promedio'] > 10) {
+            $errores['promedio'] = 'Escribe un promedio entre 0 y 10.';
+        }
+        if (mb_strlen($datos['motivo']) < 20) {
+            $errores['motivo'] = 'Cuéntanos tu motivo en al menos 20 caracteres.';
+        }
 
-    if ($errores === []) {
-        // Simulación del guardado: folio de ejemplo, sin tocar base de datos.
-        $folio   = 'BEC-' . date('Y') . '-' . str_pad((string)random_int(1, 9999), 4, '0', STR_PAD_LEFT);
-        $enviado = true;
+        // Validación de documentos
+        foreach ($documentos as $input => $nombreDoc) {
+            $archivo = $_FILES[$input] ?? null;
+
+            if ($archivo === null || $archivo['error'] === UPLOAD_ERR_NO_FILE) {
+                $errores[$input] = 'Adjunta tu ' . $nombreDoc . ' (PDF, JPG o PNG).';
+            } elseif ($archivo['error'] !== UPLOAD_ERR_OK || $archivo['size'] > 2 * 1024 * 1024) {
+                $errores[$input] = 'El archivo no se pudo recibir o pesa más de 2 MB.';
+            } elseif (!in_array((new finfo(FILEINFO_MIME_TYPE))->file($archivo['tmp_name']), $tiposDocs, true)) {
+                $errores[$input] = 'El archivo debe ser PDF, JPG o PNG.';
+            }
+        }
+
+        if (!$acepta) {
+            $errores['acepto'] = 'Debes confirmar que tus datos son verídicos.';
+        }
+
+        // Guardado de documentos (solo si todo lo anterior es válido)
+        if ($errores === []) {
+            $guardados = [];
+            foreach ($documentos as $input => $nombreDoc) {
+                try {
+                    $guardados[] = guardar_archivo($_FILES[$input], __DIR__ . '/uploads', $tiposDocs, 2);
+                } catch (RuntimeException $ex) {
+                    $errores[$input] = $ex->getMessage();
+                    break;
+                }
+            }
+            if ($errores !== []) {
+                foreach ($guardados as $nombreArchivo) {
+                    @unlink(__DIR__ . '/uploads/' . $nombreArchivo);
+                }
+            }
+        }
+
+        // Envío correcto: redirigir
+        if ($errores === []) {
+            // Folio simulado.
+            $folio = 'BEC-' . date('Y') . '-' . str_pad((string)random_int(1, 9999), 4, '0', STR_PAD_LEFT);
+
+            $_SESSION['bec_envio'] = [
+                'folio'  => $folio,
+                'beca'   => $datos['beca'],
+                'correo' => $datos['correo'],
+            ];
+            redirigir('solicitar.php?id=' . rawurlencode($datos['beca']));
+        }
     }
 }
 
-/** Clase de campo con error + mensaje bajo el control. */
+// 5. Funciones auxiliares de la vista
 function bec_clase_campo(array $errores, string $campo): string
 {
     return 'campo' . (isset($errores[$campo]) ? ' campo--invalido' : '');
+}
+function bec_aria(array $errores, string $campo): string
+{
+    return isset($errores[$campo])
+        ? ' aria-invalid="true" aria-describedby="error-' . e($campo) . '"'
+        : '';
 }
 function bec_error(array $errores, string $campo): void
 {
@@ -127,6 +173,7 @@ function bec_error(array $errores, string $campo): void
     }
 }
 
+// 6. Vista
 cabecera('Solicitar beca — Becas UTBB', '', 'css/modulo.css');
 ?>
 
@@ -146,6 +193,7 @@ cabecera('Solicitar beca — Becas UTBB', '', 'css/modulo.css');
     <li aria-current="page">Solicitar</li>
   </ol>
 
+  <?php /* Confirmación */ ?>
   <?php if ($enviado): ?>
 
     <div class="alerta alerta--exito" role="status">
@@ -166,7 +214,14 @@ cabecera('Solicitar beca — Becas UTBB', '', 'css/modulo.css');
 
   <?php else: ?>
 
-    <?php if ($errores !== []): ?>
+    <?php if ($errorGeneral !== ''): ?>
+      <div class="alerta alerta--error" role="alert">
+        <div>
+          <p class="alerta__titulo">No se pudo enviar tu solicitud</p>
+          <p><?= e($errorGeneral) ?></p>
+        </div>
+      </div>
+    <?php elseif ($errores !== []): ?>
       <div class="alerta alerta--error" role="alert">
         <div>
           <p class="alerta__titulo">Revisa tu solicitud</p>
@@ -175,16 +230,16 @@ cabecera('Solicitar beca — Becas UTBB', '', 'css/modulo.css');
       </div>
     <?php endif; ?>
 
+    <?php /* Formulario */ ?>
     <form class="formulario bec-formulario" method="POST" action="solicitar.php?id=<?= e($idBeca) ?>" enctype="multipart/form-data" novalidate>
       <?= campo_token() ?>
 
-      <!-- 1. Beca -->
       <fieldset class="grupo-campos">
         <legend class="grupo-campos__titulo">1. Beca a la que postulas</legend>
 
         <div class="<?= bec_clase_campo($errores, 'beca') ?>">
           <label class="campo__etiqueta" for="beca">Beca o apoyo <span class="campo__requerido">*</span></label>
-          <select class="campo__control" id="beca" name="beca" required>
+          <select class="campo__control" id="beca" name="beca"<?= bec_aria($errores, 'beca') ?> required>
             <?php foreach ($becas as $clave => $titulo): ?>
               <option value="<?= e($clave) ?>" <?= $datos['beca'] === $clave ? 'selected' : '' ?>><?= e($titulo) ?></option>
             <?php endforeach; ?>
@@ -193,40 +248,39 @@ cabecera('Solicitar beca — Becas UTBB', '', 'css/modulo.css');
         </div>
       </fieldset>
 
-      <!-- 2. Datos del alumno -->
       <fieldset class="grupo-campos">
         <legend class="grupo-campos__titulo">2. Datos del alumno</legend>
 
         <div class="<?= bec_clase_campo($errores, 'nombre') ?>">
           <label class="campo__etiqueta" for="nombre">Nombre completo <span class="campo__requerido">*</span></label>
-          <input class="campo__control" type="text" id="nombre" name="nombre" value="<?= e($datos['nombre']) ?>" autocomplete="name" required>
+          <input class="campo__control" type="text" id="nombre" name="nombre"<?= bec_aria($errores, 'nombre') ?> value="<?= e($datos['nombre']) ?>" autocomplete="name" required>
           <?php bec_error($errores, 'nombre'); ?>
         </div>
 
         <div class="bec-fila">
           <div class="<?= bec_clase_campo($errores, 'matricula') ?>">
             <label class="campo__etiqueta" for="matricula">Matrícula <span class="campo__requerido">*</span></label>
-            <input class="campo__control" type="text" id="matricula" name="matricula" placeholder="Ej. TI-2201044" value="<?= e($datos['matricula']) ?>" required>
+            <input class="campo__control" type="text" id="matricula" name="matricula"<?= bec_aria($errores, 'matricula') ?> placeholder="Ej. TI-2201044" value="<?= e($datos['matricula']) ?>" required>
             <?php bec_error($errores, 'matricula'); ?>
           </div>
 
           <div class="<?= bec_clase_campo($errores, 'telefono') ?>">
             <label class="campo__etiqueta" for="telefono">Teléfono</label>
-            <input class="campo__control" type="tel" id="telefono" name="telefono" value="<?= e($datos['telefono']) ?>" autocomplete="tel">
+            <input class="campo__control" type="tel" id="telefono" name="telefono"<?= bec_aria($errores, 'telefono') ?> value="<?= e($datos['telefono']) ?>" autocomplete="tel">
             <?php bec_error($errores, 'telefono'); ?>
           </div>
         </div>
 
         <div class="<?= bec_clase_campo($errores, 'correo') ?>">
           <label class="campo__etiqueta" for="correo">Correo electrónico <span class="campo__requerido">*</span></label>
-          <input class="campo__control" type="email" id="correo" name="correo" value="<?= e($datos['correo']) ?>" autocomplete="email" placeholder="usuario@utbb.edu.mx" required>
+          <input class="campo__control" type="email" id="correo" name="correo"<?= bec_aria($errores, 'correo') ?> value="<?= e($datos['correo']) ?>" autocomplete="email" placeholder="usuario@utbb.edu.mx" required>
           <?php bec_error($errores, 'correo'); ?>
         </div>
 
         <div class="bec-fila">
           <div class="<?= bec_clase_campo($errores, 'carrera') ?>">
             <label class="campo__etiqueta" for="carrera">Carrera <span class="campo__requerido">*</span></label>
-            <select class="campo__control" id="carrera" name="carrera" required>
+            <select class="campo__control" id="carrera" name="carrera"<?= bec_aria($errores, 'carrera') ?> required>
               <option value="">Selecciona…</option>
               <?php foreach ($carreras as $c): ?>
                 <option value="<?= e($c) ?>" <?= $datos['carrera'] === $c ? 'selected' : '' ?>><?= e($c) ?></option>
@@ -237,48 +291,46 @@ cabecera('Solicitar beca — Becas UTBB', '', 'css/modulo.css');
 
           <div class="<?= bec_clase_campo($errores, 'cuatri') ?>">
             <label class="campo__etiqueta" for="cuatri">Cuatrimestre <span class="campo__requerido">*</span></label>
-            <input class="campo__control" type="number" id="cuatri" name="cuatri" min="2" max="11" value="<?= e($datos['cuatri']) ?>" required>
+            <input class="campo__control" type="number" id="cuatri" name="cuatri"<?= bec_aria($errores, 'cuatri') ?> min="2" max="11" value="<?= e($datos['cuatri']) ?>" required>
             <?php bec_error($errores, 'cuatri'); ?>
           </div>
 
           <div class="<?= bec_clase_campo($errores, 'promedio') ?>">
             <label class="campo__etiqueta" for="promedio">Promedio <span class="campo__requerido">*</span></label>
-            <input class="campo__control" type="number" id="promedio" name="promedio" min="0" max="10" step="0.1" value="<?= e($datos['promedio']) ?>" required>
+            <input class="campo__control" type="number" id="promedio" name="promedio"<?= bec_aria($errores, 'promedio') ?> min="0" max="10" step="0.1" value="<?= e($datos['promedio']) ?>" required>
             <?php bec_error($errores, 'promedio'); ?>
           </div>
         </div>
 
         <div class="<?= bec_clase_campo($errores, 'motivo') ?>">
           <label class="campo__etiqueta" for="motivo">¿Por qué solicitas esta beca? <span class="campo__requerido">*</span></label>
-          <textarea class="campo__control" id="motivo" name="motivo" required><?= e($datos['motivo']) ?></textarea>
+          <textarea class="campo__control" id="motivo" name="motivo"<?= bec_aria($errores, 'motivo') ?> required><?= e($datos['motivo']) ?></textarea>
           <span class="campo__ayuda">Mínimo 20 caracteres.</span>
           <?php bec_error($errores, 'motivo'); ?>
         </div>
       </fieldset>
 
-      <!-- 3. Documentos -->
       <fieldset class="grupo-campos">
         <legend class="grupo-campos__titulo">3. Documentos</legend>
 
         <div class="<?= bec_clase_campo($errores, 'doc_identificacion') ?>">
           <label class="campo__etiqueta" for="doc_identificacion">Identificación o credencial <span class="campo__requerido">*</span></label>
-          <input class="campo__control" type="file" id="doc_identificacion" name="doc_identificacion" accept=".pdf,.jpg,.jpeg,.png" required>
+          <input class="campo__control" type="file" id="doc_identificacion" name="doc_identificacion"<?= bec_aria($errores, 'doc_identificacion') ?> accept=".pdf,.jpg,.jpeg,.png" required>
           <span class="campo__ayuda">PDF, JPG o PNG. Máximo 2 MB.</span>
           <?php bec_error($errores, 'doc_identificacion'); ?>
         </div>
 
         <div class="<?= bec_clase_campo($errores, 'doc_kardex') ?>">
           <label class="campo__etiqueta" for="doc_kardex">Kardex o constancia de calificaciones <span class="campo__requerido">*</span></label>
-          <input class="campo__control" type="file" id="doc_kardex" name="doc_kardex" accept=".pdf,.jpg,.jpeg,.png" required>
+          <input class="campo__control" type="file" id="doc_kardex" name="doc_kardex"<?= bec_aria($errores, 'doc_kardex') ?> accept=".pdf,.jpg,.jpeg,.png" required>
           <span class="campo__ayuda">PDF, JPG o PNG. Máximo 2 MB.</span>
           <?php bec_error($errores, 'doc_kardex'); ?>
         </div>
       </fieldset>
 
-      <!-- Confirmación y envío -->
       <div class="<?= bec_clase_campo($errores, 'acepto') ?>">
         <label class="opcion">
-          <input type="checkbox" name="acepto" value="1">
+          <input type="checkbox" name="acepto" value="1" <?= $acepta ? 'checked' : '' ?> required<?= bec_aria($errores, 'acepto') ?>>
           Confirmo que los datos y documentos que presento son verídicos.
         </label>
         <?php bec_error($errores, 'acepto'); ?>
