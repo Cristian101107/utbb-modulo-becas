@@ -23,18 +23,19 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 verificar_token();
 
+$fnObtener  = function_exists('bec_obtener') ? 'bec_obtener' : (function_exists('plt_obtener') ? 'plt_obtener' : null);
+$fnEliminar = function_exists('bec_eliminar') ? 'bec_eliminar' : (function_exists('plt_eliminar') ? 'plt_eliminar' : null);
+
 $accion = (string) post('accion');
 $origen = (string) post('origen');
 
-// Construye la ruta de retorno segura (evita Open Redirect)
 $rutaRetorno = 'index.php';
-if ($origen === 'eliminar') {
-    $dias   = entero(post('dias_actuales')) ?? 60;
-    $estado = preg_replace('/[^a-z_]/', '', (string) post('estado_actual'));
-    $rutaRetorno = 'eliminar.php?dias=' . $dias . ($estado !== '' ? '&estado=' . urlencode($estado) : '');
+if ($origen === 'depuracion') {
+    $dias        = entero(post('dias_actuales')) ?? 60;
+    $estado      = preg_replace('/[^a-z_]/', '', (string) post('estado_actual'));
+    $rutaRetorno = 'depuracion.php?dias=' . $dias . ($estado !== '' ? '&estado=' . urlencode($estado) : '');
 }
 
-// Función auxiliar para borrar archivos adjuntos sin riesgo de Path Traversal
 $borrarArchivoSeguro = static function (?string $nombreArchivo): void {
     if (empty($nombreArchivo)) {
         return;
@@ -48,12 +49,12 @@ $borrarArchivoSeguro = static function (?string $nombreArchivo): void {
 };
 
 /* =========================================================================
-   CASO A: Eliminación masiva por lote (desde depuracion.php)
+   CASO A: Eliminación masiva por lote
    ========================================================================= */
 if ($accion === 'eliminar_lote') {
     $rawSeleccion = is_array($_POST['seleccionados'] ?? null) ? $_POST['seleccionados'] : [];
     $idsSeleccionados = array_slice(
-        array_values(array_filter(array_map('intval', $rawSeleccion), static fn(int $i): bool => $i > 0)),
+        array_values(array_unique(array_filter(array_map('intval', $rawSeleccion), static fn(int $i): bool => $i > 0))),
         0,
         100
     );
@@ -64,24 +65,22 @@ if ($accion === 'eliminar_lote') {
     }
 
     try {
-        if (!function_exists('plt_obtener') || !function_exists('plt_eliminar')) {
-            throw new RuntimeException('Funciones de consulta aún no conectadas.');
+        if ($fnObtener === null || $fnEliminar === null) {
+            throw new RuntimeException('Funciones bec_obtener / bec_eliminar no disponibles en consultas.php.');
         }
 
         $eliminados = 0;
         foreach ($idsSeleccionados as $idItem) {
-            $reg = plt_obtener($idItem);
+            $reg = $fnObtener($idItem);
             if ($reg === null) {
                 continue;
             }
 
-            // Un editor solo puede purgar registros de su propia carrera.
-            // Si el registro no incluye carrera_id, no se puede validar el permiso.
             if (rol() === 'editor' && (!isset($reg['carrera_id']) || (int) $reg['carrera_id'] !== carrera_del_usuario())) {
                 continue;
             }
 
-            plt_eliminar($idItem);
+            $fnEliminar($idItem);
             $borrarArchivoSeguro($reg['imagen'] ?? null);
             $borrarArchivoSeguro($reg['archivo'] ?? null);
             $eliminados++;
@@ -100,7 +99,7 @@ if ($accion === 'eliminar_lote') {
 }
 
 /* =========================================================================
-   CASO B: Eliminación individual (desde index.php o purga individual)
+   CASO B: Eliminación individual
    ========================================================================= */
 $id = entero(post('id'));
 
@@ -110,29 +109,28 @@ if ($id === null || $id <= 0) {
 }
 
 try {
-    if (!function_exists('plt_obtener') || !function_exists('plt_eliminar')) {
-        throw new RuntimeException('Funciones de consulta aún no conectadas.');
+    if ($fnObtener === null || $fnEliminar === null) {
+        throw new RuntimeException('Funciones bec_obtener / bec_eliminar no disponibles en consultas.php.');
     }
 
-    $registro = plt_obtener($id);
+    $registro = $fnObtener($id);
 
     if ($registro === null) {
         mensaje('error', 'El registro ya no existe.');
         redirigir($rutaRetorno);
     }
 
-    if (isset($registro['carrera_id'])) {
+    if (isset($registro['carrera_id']) && $registro['carrera_id'] !== null) {
         requerir_carrera((int) $registro['carrera_id']);
     }
 
-    plt_eliminar($id);
+    $fnEliminar($id);
 
     $borrarArchivoSeguro($registro['imagen'] ?? null);
     $borrarArchivoSeguro($registro['archivo'] ?? null);
 
-    mensaje('exito', $origen === 'eliminar' ? 'Registro y archivos eliminados.' : 'Convocatoria eliminada.');
+    mensaje('exito', $origen === 'depuracion' ? 'Registro y archivos eliminados.' : 'Convocatoria eliminada.');
 } catch (PDOException $e) {
-    // Por ejemplo, cuando otra tabla lo referencia con ON DELETE RESTRICT.
     error_log('Error al eliminar: ' . $e->getMessage());
     mensaje('error', 'No se pudo eliminar: el registro tiene información asociada.');
 } catch (Throwable $e) {
