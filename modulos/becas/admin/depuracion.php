@@ -79,23 +79,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $estadoPost = trim((string) ($_POST['estado_actual'] ?? ''));
     $filtroEstado = in_array($estadoPost, $estadosPermitidos, true) ? $estadoPost : '';
 
-    if ($accion === 'purgar_uno') {
-        $idPurgar = entero($_POST['id'] ?? null) ?? 0;
-        $tituloPurgado = '';
+    if ($accion === 'eliminar_uno') {
+        $idEliminar = entero($_POST['id'] ?? null) ?? 0;
+        $tituloEliminado = '';
 
         foreach ($registrosHistoricos as $idx => $item) {
-            if ($item['id'] === $idPurgar) {
-                $tituloPurgado = $item['titulo'];
+            if ($item['id'] === $idEliminar) {
+                $tituloEliminado = $item['titulo'];
                 unset($registrosHistoricos[$idx]);
                 break;
             }
         }
 
-        if ($tituloPurgado !== '') {
+        if ($tituloEliminado !== '') {
             $alerta = [
                 'tipo' => 'exito',
-                'titulo' => 'Registro depurado (simulación)',
-                'texto' => "Se eliminó «{$tituloPurgado}» y sus archivos asociados de la vista actual.",
+                'titulo' => 'Registro eliminado (simulación)',
+                'texto' => "Se eliminó «{$tituloEliminado}» y sus archivos asociados de la vista actual.",
             ];
         } else {
             $alerta = [
@@ -104,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'texto' => 'El registro indicado no existe o no es elegible para depuración.',
             ];
         }
-    } elseif ($accion === 'purgar_lote') {
+    } elseif ($accion === 'eliminar_lote') {
         $rawSeleccion = is_array($_POST['seleccionados'] ?? null) ? $_POST['seleccionados'] : [];
         // Filtramos solo enteros positivos válidos y limitamos el lote a 100 elementos
         $idsSeleccionados = array_slice(
@@ -130,8 +130,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $alerta = [
                 'tipo' => 'exito',
-                'titulo' => 'Depuración por lote completada (simulación)',
-                'texto' => "Se purgaron {$eliminados} registro(s) vencido(s) y sus archivos temporales sin tocar la base de datos.",
+                'titulo' => 'Eliminación por lote completada (simulación)',
+                'texto' => "Se eliminaron {$eliminados} registro(s) vencido(s) y sus archivos temporales sin tocar la base de datos.",
             ];
         }
     }
@@ -214,10 +214,10 @@ cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
 
   <?php else: ?>
 
-    <form method="POST" action="depuracion.php" id="form-depuracion-lote"
-          onsubmit="return confirm('¿Purgar los registros y archivos seleccionados?')">
+    <form method="POST" action="depuracion.php" id="form-eliminar-lote"
+          onsubmit="return confirm('¿Eliminar los registros y archivos seleccionados?')">
       <?= campo_token() ?>
-      <input type="hidden" name="accion" value="purgar_lote">
+      <input type="hidden" name="accion" value="eliminar_lote">
       <input type="hidden" name="dias_actuales" value="<?= (int) $diasRetencion ?>">
       <input type="hidden" name="estado_actual" value="<?= e($filtroEstado) ?>">
 
@@ -274,8 +274,8 @@ cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
                   <menu class="tabla__acciones">
                     <li>
                       <button class="boton boton--peligro boton--pequeno" type="submit"
-                              form="form-purgar-<?= (int) $item['id'] ?>">
-                        Purgar
+                              form="form-eliminar-<?= (int) $item['id'] ?>">
+                        Eliminar
                       </button>
                     </li>
                   </menu>
@@ -288,10 +288,10 @@ cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
     </form>
 
     <?php foreach ($candidatos as $item): ?>
-      <form method="POST" action="depuracion.php" id="form-purgar-<?= (int) $item['id'] ?>"
-            onsubmit="return confirm('¿Purgar este registro y sus archivos?')">
+      <form method="POST" action="depuracion.php" id="form-eliminar-<?= (int) $item['id'] ?>"
+            onsubmit="return confirm('¿Eliminar este registro y sus archivos?')">
         <?= campo_token() ?>
-        <input type="hidden" name="accion" value="purgar_uno">
+        <input type="hidden" name="accion" value="eliminar_uno">
         <input type="hidden" name="id" value="<?= (int) $item['id'] ?>">
         <input type="hidden" name="dias_actuales" value="<?= (int) $diasRetencion ?>">
         <input type="hidden" name="estado_actual" value="<?= e($filtroEstado) ?>">
