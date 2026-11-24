@@ -21,6 +21,16 @@ function conexion_becas_depuracion() {
             return $GLOBALS[$nombre];
         }
     }
+
+    // El módulo compartido puede publicar la conexión con otro nombre.
+    foreach ($GLOBALS as $valor) {
+        if ($valor instanceof \PDO || $valor instanceof \mysqli) {
+            return $valor;
+        }
+        if (is_object($valor) && method_exists($valor, 'query') && method_exists($valor, 'prepare')) {
+            return $valor;
+        }
+    }
     return null;
 }
 
@@ -95,8 +105,8 @@ function cargar_convocatorias_depuracion(): array {
             }
 
             $columnaId = $normalizadas['id_convocatoria'] ?? $normalizadas['id'] ?? null;
-            $columnaTitulo = $normalizadas['titulo'] ?? $normalizadas['nombre'] ?? $normalizadas['titulo_convocatoria'] ?? null;
-            $columnaVencimiento = $normalizadas['fecha_vencimiento'] ?? $normalizadas['fecha_cierre'] ?? $normalizadas['fecha_fin'] ?? $normalizadas['vencimiento'] ?? $normalizadas['cierre'] ?? null;
+            $columnaTitulo = $normalizadas['titulo'] ?? $normalizadas['nombre'] ?? $normalizadas['titulo_convocatoria'] ?? $normalizadas['nombre_convocatoria'] ?? null;
+            $columnaVencimiento = $normalizadas['fecha_vencimiento'] ?? $normalizadas['fecha_cierre'] ?? $normalizadas['fecha_fin'] ?? $normalizadas['fecha_fin_convocatoria'] ?? $normalizadas['fecha_limite'] ?? $normalizadas['vencimiento'] ?? $normalizadas['cierre'] ?? null;
             $columnaEstado = $normalizadas['estado'] ?? $normalizadas['estatus'] ?? $normalizadas['status'] ?? $normalizadas['situacion'] ?? null;
 
             if ($columnaId === null || $columnaTitulo === null || $columnaVencimiento === null) {
@@ -144,8 +154,11 @@ function cargar_convocatorias_depuracion(): array {
                     continue;
                 }
 
+                $estadoTexto = $columnaEstado !== null
+                    ? trim((string) ($fila[$columnaEstado] ?? ''))
+                    : '';
                 $estadoRaw = $columnaEstado !== null
-                    ? mb_strtolower(trim((string) ($fila[$columnaEstado] ?? '')))
+                    ? (function_exists('mb_strtolower') ? mb_strtolower($estadoTexto, 'UTF-8') : strtolower($estadoTexto))
                     : 'cerrada';
 
                 // Normaliza estados comunes sin inventar estados que no existan en la base.
