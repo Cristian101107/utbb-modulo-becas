@@ -1,28 +1,27 @@
-/* ============================================================================
-   MÓDULO PLANTILLA · modulo.css
-   Explorador Vocacional UTBB
-
-   Esta hoja es TUYA. Aquí va únicamente lo que el sistema de diseño no
-   resuelve: una pieza propia de tu módulo, como el reproductor de escenas
-   del recorrido virtual o la barra de avance del test vocacional.
-
-   ANTES DE ESCRIBIR AQUÍ, REVISA LA GUÍA VISUAL. Si el componente ya existe,
-   se usa; no se vuelve a escribir.
-
-   Reglas
-     · Se usan las variables del núcleo: var(--marca-700), var(--e4)...
-       Un valor hexadecimal escrito a mano en este archivo es un error.
-     · No se redefine nada de ev-base.css. Si algo del sistema no te sirve,
-       se plantea en clase; no se parcha por módulo.
-     · Los nombres de clase llevan el prefijo del módulo para no chocar con
-       los de otro equipo al integrar: .plt-escena, .plt-avance
-   ========================================================================= */
-
-
 /* ==========================================================================
    MÓDULO BECAS · modulo.css
    Explorador Vocacional UTBB
    ========================================================================== */
+
+/* --- Vista pública y detalle (código del equipo) --- */
+.bec-portada {
+  padding-top: calc(var(--e7, 3rem) + 1rem);
+  padding-bottom: var(--e6, 2.5rem);
+}
+
+.bec-tarjeta {
+  border-top: 3px solid var(--marca-700);
+}
+
+.bec-etiqueta-tipo {
+  display: inline-block;
+  font-size: var(--t-xs, 0.78rem);
+  font-weight: var(--peso-fuerte, 600);
+  color: var(--marca-700);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: var(--e2);
+}
 
 .bec-monto {
   font-family: var(--fuente-titulo);
@@ -32,7 +31,6 @@
   margin-bottom: var(--e3);
 }
 
-/* Escritorio (900px o más): 2 columnas */
 .bec-detalle-grid {
   display: grid;
   grid-template-columns: 2fr 1fr;
@@ -48,39 +46,6 @@
   margin-bottom: var(--e5);
 }
 
-/* Tablet y Celular (menor a 900px): 1 columna apilada */
-@media (max-width: 899px) {
-  .bec-detalle-grid {
-    grid-template-columns: 1fr;
-  }
-}
-/* ==========================================================================
-   MÓDULO BECAS · modulo.css
-   Explorador Vocacional UTBB
-   ========================================================================== */
-
-/* Evita que el título se corte debajo del encabezado fijo */
-.bec-portada {
-  padding-top: calc(var(--e7, 3rem) + 1rem);
-  padding-bottom: var(--e6, 2.5rem);
-}
-
-/* Detalle sutil usando únicamente variables oficiales de ev-base.css */
-.bec-tarjeta {
-  border-top: 3px solid var(--marca-700);
-}
-
-.bec-etiqueta-tipo {
-  display: inline-block;
-  font-size: var(--t-xs, 0.78rem);
-  font-weight: var(--peso-fuerte, 600);
-  color: var(--marca-700);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin-bottom: var(--e2);
-}
-
-/* Barra institucional de contacto usando superficies y bordes oficiales */
 .bec-contacto {
   margin-top: var(--e6);
   padding: var(--e4) var(--e5);
@@ -96,16 +61,11 @@
   color: var(--tinta-suave);
 }
 
-/* ==========================================================================
-   MÓDULO BECAS · Postulación (solicitar.php)
-   ========================================================================== */
-
-/* El formulario de postulación necesita más ancho que el .formulario base */
+/* --- Postulación / solicitar.php (código del equipo) --- */
 .bec-formulario {
   max-width: 760px;
 }
 
-/* Campos en fila: 1 columna en celular, varias desde tablet */
 .bec-fila {
   display: grid;
   grid-template-columns: 1fr;
@@ -115,5 +75,130 @@
 @media (min-width: 600px) {
   .bec-fila {
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+}
+
+/* --- Panel administrativo y depuración (integración admin/) --- */
+.becas-herramientas {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--e2);
+}
+
+.becas-etiqueta-plantilla {
+  font-size: var(--t-xs);
+  font-weight: var(--peso-fuerte);
+  color: var(--texto-suave);
+}
+
+/* Reseteos semánticos para <fieldset> y <menu> sin alterar ev-base.css */
+.becas-fieldset {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--e4);
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+menu.tabla__acciones {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+menu.tabla__acciones li {
+  display: inline-flex;
+  margin: 0;
+}
+
+/* Filtros en barra administrativa */
+.becas-campo-busqueda {
+  flex: 1 1 240px;
+}
+
+.becas-campo-filtro {
+  flex: 0 1 220px;
+}
+
+/* Rejillas del editor de convocatorias */
+.becas-grid {
+  display: grid;
+  gap: var(--e4);
+}
+
+.becas-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.becas-grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Badges de estado (<mark class="beca-estado">) */
+.beca-estado {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--e3);
+  border-radius: var(--radio-pastilla);
+  font-size: var(--t-xs);
+  font-weight: var(--peso-fuerte);
+  white-space: nowrap;
+}
+
+.beca-estado--activa {
+  background-color: var(--exito-fondo);
+  color: var(--exito);
+}
+
+.beca-estado--proxima,
+.beca-estado--aceptada_vencida {
+  background-color: var(--marca-100);
+  color: var(--marca-700);
+}
+
+.beca-estado--cerrada,
+.beca-estado--borrador {
+  background-color: var(--superficie);
+  color: var(--texto-suave);
+  border: 1px solid var(--borde);
+}
+
+.beca-estado--rechazada {
+  background-color: var(--error-fondo);
+  color: var(--error);
+}
+
+.beca-col-check {
+  width: 36px;
+  text-align: center;
+}
+
+/* --- Tablet y Celular (menor a 900px) --- */
+@media (max-width: 899px) {
+  .bec-detalle-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .becas-herramientas {
+    width: 100%;
+  }
+
+  .becas-herramientas .boton,
+  .becas-fieldset .boton {
+    width: 100%;
+  }
+
+  .becas-campo-busqueda,
+  .becas-campo-filtro {
+    flex: 1 1 100%;
+  }
+
+  .becas-grid--2,
+  .becas-grid--3 {
+    grid-template-columns: 1fr;
   }
 }
