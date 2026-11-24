@@ -1,6 +1,6 @@
 <?php
 /**
- * MÓDULO BECAS · Depuración de convocatorias y expedientes vencidos
+ * MÓDULO BECAS · Eliminación de convocatorias y expedientes vencidos
  * Explorador Vocacional UTBB
  */
 
@@ -8,7 +8,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../../nucleo/comun.php';
 
-// Verificación de rol obligatoria
+// 1. Verificación de rol obligatoria
 requerir_rol('editor', 'coordinacion');
 
 $diasPermitidos    = [30, 60, 90, 180];
@@ -79,32 +79,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $estadoPost = trim((string) ($_POST['estado_actual'] ?? ''));
     $filtroEstado = in_array($estadoPost, $estadosPermitidos, true) ? $estadoPost : '';
 
-    if ($accion === 'purgar_uno') {
-        $idPurgar = entero($_POST['id'] ?? null) ?? 0;
-        $tituloPurgado = '';
+    if ($accion === 'eliminar_uno') {
+        $idEliminar = entero($_POST['id'] ?? null) ?? 0;
+        $tituloEliminado = '';
 
         foreach ($registrosHistoricos as $idx => $item) {
-            if ($item['id'] === $idPurgar) {
-                $tituloPurgado = $item['titulo'];
+            if ($item['id'] === $idEliminar) {
+                $tituloEliminado = $item['titulo'];
                 unset($registrosHistoricos[$idx]);
                 break;
             }
         }
 
-        if ($tituloPurgado !== '') {
+        if ($tituloEliminado !== '') {
             $alerta = [
                 'tipo' => 'exito',
-                'titulo' => 'Registro depurado (simulación)',
-                'texto' => "Se eliminó «{$tituloPurgado}» y sus archivos asociados de la vista actual.",
+                'titulo' => 'Registro eliminado (simulación)',
+                'texto' => "Se eliminó «{$tituloEliminado}» y sus archivos asociados de la vista actual.",
             ];
         } else {
             $alerta = [
                 'tipo' => 'error',
                 'titulo' => 'Identificador no válido',
-                'texto' => 'El registro indicado no existe o no es elegible para depuración.',
+                'texto' => 'El registro indicado no existe o no es elegible para eliminación.',
             ];
         }
-    } elseif ($accion === 'purgar_lote') {
+    } elseif ($accion === 'eliminar_lote') {
         $rawSeleccion = is_array($_POST['seleccionados'] ?? null) ? $_POST['seleccionados'] : [];
         // Filtramos solo enteros positivos válidos y limitamos el lote a 100 elementos
         $idsSeleccionados = array_slice(
@@ -117,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $alerta = [
                 'tipo' => 'alerta',
                 'titulo' => 'Sin selección válida',
-                'texto' => 'Selecciona al menos un registro vencido en la tabla para ejecutar la depuración masiva.',
+                'texto' => 'Selecciona al menos un registro vencido en la tabla para ejecutar la eliminación masiva.',
             ];
         } else {
             $eliminados = 0;
@@ -130,8 +130,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $alerta = [
                 'tipo' => 'exito',
-                'titulo' => 'Depuración por lote completada (simulación)',
-                'texto' => "Se purgaron {$eliminados} registro(s) vencido(s) y sus archivos temporales sin tocar la base de datos.",
+                'titulo' => 'Eliminación por lote completada (simulación)',
+                'texto' => "Se eliminaron {$eliminados} registro(s) vencido(s) y sus archivos temporales sin tocar la base de datos.",
             ];
         }
     }
@@ -155,7 +155,7 @@ foreach ($registrosHistoricos as $item) {
     $candidatos[] = $item;
 }
 
-cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
+cabecera('Eliminación · Becas y apoyos', '', '../css/modulo.css');
 ?>
 
 <section class="contenedor seccion">
@@ -164,12 +164,12 @@ cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
     <ol class="migas">
       <li><a href="<?= RUTA_BASE ?>/panel.php">Panel</a></li>
       <li><a href="index.php">Becas y apoyos</a></li>
-      <li>Depuración</li>
+      <li>Eliminación</li>
     </ol>
   </nav>
 
   <header class="fila fila--separada mb-6">
-    <h1 class="sin-margen">Depuración de becas y expedientes</h1>
+    <h1 class="sin-margen">Eliminación de becas y expedientes por eliminación</h1>
     <a class="boton boton--secundario" href="index.php">Volver al listado</a>
   </header>
 
@@ -192,7 +192,7 @@ cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
       </p>
 
       <p class="campo sin-margen becas-campo-busqueda">
-        <label class="campo__etiqueta" for="estado">Motivo de depuración</label>
+        <label class="campo__etiqueta" for="estado">Motivo de eliminación</label>
         <select class="campo__control" id="estado" name="estado">
           <option value="">Todos los vencidos o resueltos</option>
           <option value="cerrada" <?= $filtroEstado === 'cerrada' ? 'selected' : '' ?>>Convocatorias cerradas</option>
@@ -208,16 +208,16 @@ cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
   <?php if (empty($candidatos)): ?>
 
     <article class="vacio">
-      <h2>Sin registros por depurar</h2>
+      <h2>Sin registros por eliminar</h2>
       <p class="ancho-lectura">No hay convocatorias ni expedientes que superen los <?= (int) $diasRetencion ?> días de antigüedad con este criterio.</p>
     </article>
 
   <?php else: ?>
 
-    <form method="POST" action="depuracion.php" id="form-depuracion-lote"
-          onsubmit="return confirm('¿Purgar los registros y archivos seleccionados?')">
+    <form method="POST" action="depuracion.php" id="form-eliminar-lote"
+          onsubmit="return confirm('¿Eliminar los registros y archivos seleccionados?')">
       <?= campo_token() ?>
-      <input type="hidden" name="accion" value="purgar_lote">
+      <input type="hidden" name="accion" value="eliminar_lote">
       <input type="hidden" name="dias_actuales" value="<?= (int) $diasRetencion ?>">
       <input type="hidden" name="estado_actual" value="<?= e($filtroEstado) ?>">
 
@@ -225,7 +225,7 @@ cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
         <p class="sin-margen">
           <strong><?= count($candidatos) ?></strong> registro(s) con &ge; <?= (int) $diasRetencion ?> días vencidos.
         </p>
-        <button class="boton boton--peligro boton--pequeno" type="submit">Depurar seleccionados</button>
+        <button class="boton boton--peligro boton--pequeno" type="submit">Eliminar seleccionados</button>
       </header>
 
       <figure class="tabla-envoltura sin-margen">
@@ -247,7 +247,7 @@ cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
               <tr>
                 <td class="beca-col-check">
                   <input type="checkbox" name="seleccionados[]" value="<?= (int) $item['id'] ?>"
-                         class="check-depuracion" aria-label="Seleccionar <?= e($item['titulo']) ?>">
+                         class="check-eliminacion" aria-label="Seleccionar <?= e($item['titulo']) ?>">
                 </td>
                 <td>
                   <strong><?= e($item['titulo']) ?></strong><br>
@@ -274,8 +274,8 @@ cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
                   <menu class="tabla__acciones">
                     <li>
                       <button class="boton boton--peligro boton--pequeno" type="submit"
-                              form="form-purgar-<?= (int) $item['id'] ?>">
-                        Purgar
+                              form="form-eliminar-<?= (int) $item['id'] ?>">
+                        Eliminar
                       </button>
                     </li>
                   </menu>
@@ -288,10 +288,10 @@ cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
     </form>
 
     <?php foreach ($candidatos as $item): ?>
-      <form method="POST" action="depuracion.php" id="form-purgar-<?= (int) $item['id'] ?>"
-            onsubmit="return confirm('¿Purgar este registro y sus archivos?')">
+      <form method="POST" action="depuracion.php" id="form-eliminar-<?= (int) $item['id'] ?>"
+            onsubmit="return confirm('¿Eliminar este registro y sus archivos?')">
         <?= campo_token() ?>
-        <input type="hidden" name="accion" value="purgar_uno">
+        <input type="hidden" name="accion" value="eliminar_uno">
         <input type="hidden" name="id" value="<?= (int) $item['id'] ?>">
         <input type="hidden" name="dias_actuales" value="<?= (int) $diasRetencion ?>">
         <input type="hidden" name="estado_actual" value="<?= e($filtroEstado) ?>">
@@ -304,7 +304,7 @@ cabecera('Depuración · Becas y apoyos', '', '../css/modulo.css');
 
 <script>
 document.getElementById('seleccionar-todos')?.addEventListener('change', function (e) {
-  document.querySelectorAll('.check-depuracion').forEach(function (chk) {
+  document.querySelectorAll('.check-eliminacion').forEach(function (chk) {
     chk.checked = e.target.checked;
   });
 });

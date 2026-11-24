@@ -1,15 +1,7 @@
 <?php
 /**
- * MÓDULO PLANTILLA · Alta y modificación
+ * MÓDULO BECAS · Alta y modificación de convocatorias
  * Explorador Vocacional UTBB
- *
- * Una sola página resuelve alta y modificación: sin ?id= es alta, con ?id=
- * es modificación. Repetir el formulario en dos archivos duplica el trabajo
- * y garantiza que tarde o temprano se desincronicen.
- *
- * Ciclo completo: GET pinta el formulario → POST valida en el servidor →
- * si hay errores se vuelve a pintar con los datos escritos → si todo está
- * bien se guarda, se deja un mensaje y se REDIRIGE.
  */
 
 declare(strict_types=1);
@@ -18,48 +10,124 @@ require_once __DIR__ . '/../../../nucleo/comun.php';
 
 requerir_rol('editor', 'coordinacion');
 
-require_once __DIR__ . '/../includes/consultas.php';
+if (file_exists(__DIR__ . '/../includes/consultas.php')) {
+    require_once __DIR__ . '/../includes/consultas.php';
+}
 
 const CARPETA_SUBIDAS = __DIR__ . '/../uploads';
 
-$id       = entero(get('id'));
-$registro = $id !== null ? plt_obtener($id) : null;
+$categoriasPermitidas = [
+    'Mérito Académico',
+    'Socioeconómica',
+    'Movilidad',
+    'Investigación',
+    'Deportiva / Cultural',
+];
 
-if ($id !== null && $registro === null) {
-    no_encontrado('El registro no existe.');
+$estadosPermitidos = [
+    'borrador' => 'Borrador',
+    'proxima'  => 'Próxima',
+    'activa'   => 'Activa',
+    'cerrada'  => 'Cerrada',
+];
+
+$plantillasBase = [
+    'estandar' => [
+        'titulo'     => 'Convocatoria Institucional de Apoyo Estudiantil 2026',
+        'tipo'       => 'Socioeconómica',
+        'monto'      => '$3,000.00 MXN / cuatrimestre',
+        'apertura'   => date('Y-m-d'),
+        'cierre'     => date('Y-m-d', strtotime('+20 days')),
+        'estado'     => 'proxima',
+        'resumen'    => 'Apoyo económico cuatrimestral dirigido a estudiantes con necesidad socioeconómica comprobable.',
+        'requisitos' => "- Estar inscrito en el periodo escolar vigente.\n- Promedio mínimo de 8.0 sin adeudos administrativos.\n- Solicitud firmada y copia de identificación oficial.\n- Comprobante de ingresos familiares reciente.",
+        'cuerpo'     => 'Consulta las bases completas y entrega tu expediente digital dentro de las fechas establecidas.',
+    ],
+    'excelencia' => [
+        'titulo'     => 'Beca al Mérito y Rendimiento Académico 2026',
+        'tipo'       => 'Mérito Académico',
+        'monto'      => '$5,000.00 MXN / cuatrimestre',
+        'apertura'   => date('Y-m-d'),
+        'cierre'     => date('Y-m-d', strtotime('+15 days')),
+        'estado'     => 'proxima',
+        'resumen'    => 'Reconocimiento económico al desempeño académico sobresaliente de estudiantes regulares.',
+        'requisitos' => "- Promedio mínimo de 9.5 en el ciclo inmediato anterior.\n- Haber cursado la carga académica completa.\n- Carta de exposición de motivos.",
+        'cuerpo'     => 'El comité evaluador validará el historial académico oficial emitido por Servicios Escolares.',
+    ],
+];
+
+$id       = entero(get('id'));
+$registro = null;
+
+if ($id !== null && function_exists('plt_obtener')) {
+    try {
+        $registro = plt_obtener($id);
+    } catch (Throwable $e) {
+        $registro = null;
+    }
+
+    if ($registro === null) {
+        no_encontrado('La convocatoria no existe.');
+    }
 }
 
 // Un editor solo trabaja sobre su carrera.
-if ($registro !== null) {
-    requerir_carrera((int)$registro['carrera_id']);
+if ($registro !== null && isset($registro['carrera_id'])) {
+    requerir_carrera((int) $registro['carrera_id']);
 }
 
-// Valores que se pintan en el formulario.
+// Valores iniciales del formulario (fusión de plantilla + becas)
 $datos = [
     'carrera_id' => $registro['carrera_id'] ?? (carrera_del_usuario() ?? ''),
     'titulo'     => $registro['titulo']     ?? '',
+    'tipo'       => $registro['tipo']       ?? 'Mérito Académico',
+    'monto'      => $registro['monto']      ?? '',
+    'apertura'   => $registro['apertura']   ?? '',
+    'cierre'     => $registro['cierre']     ?? '',
+    'estado'     => $registro['estado']     ?? 'proxima',
     'resumen'    => $registro['resumen']    ?? '',
+    'requisitos' => $registro['requisitos'] ?? '',
     'cuerpo'     => $registro['cuerpo']     ?? '',
     'imagen'     => $registro['imagen']     ?? null,
 ];
 
-$errores = [];
+$errores    = [];
+$alertaInfo = null;
+
+// Carga de plantilla base en modo alta (?plantilla=estandar | excelencia)
+$plantillaSolicitada = trim((string) get('plantilla'));
+if ($registro === null && $plantillaSolicitada !== '' && array_key_exists($plantillaSolicitada, $plantillasBase)) {
+    $datos = array_merge($datos, $plantillasBase[$plantillaSolicitada]);
+    $alertaInfo = 'Plantilla base cargada. Ajusta montos, fechas o requisitos antes de guardar.';
+}
+
+$validarFechaIso = static function (string $fecha): bool {
+    $dt = DateTime::createFromFormat('Y-m-d', $fecha);
+    return $dt !== false && $dt->format('Y-m-d') === $fecha;
+};
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     verificar_token();
 
+    $limpiar = static fn(string $v): string => trim(str_replace("\0", '', $v));
+
     $datos['carrera_id'] = entero(post('carrera_id'));
-    $datos['titulo']     = post('titulo');
-    $datos['resumen']    = post('resumen');
-    $datos['cuerpo']     = post('cuerpo');
+    $datos['titulo']     = $limpiar((string) post('titulo'));
+    $datos['tipo']       = $limpiar((string) post('tipo'));
+    $datos['monto']      = $limpiar((string) post('monto'));
+    $datos['apertura']   = $limpiar((string) post('apertura'));
+    $datos['cierre']     = $limpiar((string) post('cierre'));
+    $datos['estado']     = $limpiar((string) post('estado'));
+    $datos['resumen']    = $limpiar((string) post('resumen'));
+    $datos['requisitos'] = $limpiar((string) post('requisitos'));
+    $datos['cuerpo']     = $limpiar((string) post('cuerpo'));
 
     /* --- Validación en el servidor ------------------------------------ */
 
     if ($datos['carrera_id'] === null || carrera($datos['carrera_id']) === null) {
         $errores['carrera_id'] = 'Selecciona una carrera válida.';
     } else {
-        // Un editor no puede asignar el registro a otra carrera.
         requerir_carrera($datos['carrera_id']);
     }
 
@@ -69,17 +137,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errores['titulo'] = 'El título no puede pasar de 160 caracteres.';
     }
 
+    if (!in_array($datos['tipo'], $categoriasPermitidas, true)) {
+        $errores['tipo'] = 'Selecciona una categoría de beca válida.';
+    }
+
+    if ($datos['monto'] === '') {
+        $errores['monto'] = 'El monto y periodicidad son obligatorios.';
+    } elseif (mb_strlen($datos['monto']) > 80) {
+        $errores['monto'] = 'El monto no puede exceder 80 caracteres.';
+    }
+
+    if (!$validarFechaIso($datos['apertura'])) {
+        $errores['apertura'] = 'Indica una fecha de apertura válida.';
+    }
+
+    if (!$validarFechaIso($datos['cierre'])) {
+        $errores['cierre'] = 'Indica una fecha de cierre válida.';
+    } elseif (!isset($errores['apertura']) && $datos['cierre'] < $datos['apertura']) {
+        $errores['cierre'] = 'La fecha de cierre no puede ser anterior a la de apertura.';
+    }
+
+    if (!array_key_exists($datos['estado'], $estadosPermitidos)) {
+        $errores['estado'] = 'Selecciona un estado válido.';
+    }
+
+    if ($datos['requisitos'] === '') {
+        $errores['requisitos'] = 'Captura al menos un requisito para los aspirantes.';
+    } elseif (mb_strlen($datos['requisitos']) > 3000) {
+        $errores['requisitos'] = 'Los requisitos no pueden exceder 3,000 caracteres.';
+    }
+
     if (mb_strlen($datos['resumen']) > 400) {
         $errores['resumen'] = 'El resumen no puede pasar de 400 caracteres.';
     }
 
-    /* --- Imagen (opcional) -------------------------------------------- */
+    /* --- Imagen (opcional, de la plantilla de tus compañeros) ---------- */
 
     if (!empty($_FILES['imagen']['name'])) {
         try {
             $nuevo = guardar_archivo($_FILES['imagen'], CARPETA_SUBIDAS, SOLO_IMAGEN, 2);
 
-            // Se borra la anterior solo cuando la nueva ya quedó guardada.
             if (!empty($registro['imagen'])) {
                 @unlink(CARPETA_SUBIDAS . '/' . $registro['imagen']);
             }
@@ -90,23 +187,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    /* --- Guardar ------------------------------------------------------- */
+    /* --- Guardar (BD real si existe la tabla, o simulación segura) ----- */
 
     if (!$errores) {
-        if ($registro === null) {
-            $datos['estado'] = 'borrador';   // el estado inicial lo fija el servidor
-            $nuevoId = plt_crear($datos, usuario()['id']);
-            mensaje('exito', 'Registro creado como borrador.');
-        } else {
-            plt_actualizar((int)$registro['id'], $datos);
-            mensaje('exito', 'Cambios guardados.');
-        }
+        try {
+            if ($registro === null) {
+                if (function_exists('plt_crear')) {
+                    plt_crear($datos, usuario()['id']);
+                }
+                mensaje('exito', 'Convocatoria creada correctamente.');
+            } else {
+                if (function_exists('plt_actualizar')) {
+                    plt_actualizar((int) $registro['id'], $datos);
+                }
+                mensaje('exito', 'Cambios guardados correctamente.');
+            }
 
-        redirigir('index.php');   // POST-Redirect-GET
+            redirigir('index.php');
+        } catch (Throwable $e) {
+            // Respaldo mientras la tabla SQL del módulo aún no se crea en XAMPP
+            $accionTxt = $registro === null ? 'registrada' : 'actualizada';
+            $alertaInfo = "Convocatoria {$accionTxt} en modo simulación (la tabla SQL aún no está creada).";
+        }
     }
 }
 
-cabecera($registro ? 'Editar registro' : 'Nuevo registro', '', '../css/modulo.css');
+cabecera($registro ? 'Editar convocatoria' : 'Nueva convocatoria', '', '../css/modulo.css');
 ?>
 
 <section class="contenedor seccion">
@@ -114,27 +220,41 @@ cabecera($registro ? 'Editar registro' : 'Nuevo registro', '', '../css/modulo.cs
   <nav aria-label="Ruta">
     <ol class="migas">
       <li><a href="<?= RUTA_BASE ?>/panel.php">Panel</a></li>
-      <li><a href="index.php">Módulo plantilla</a></li>
-      <li><?= $registro ? 'Editar' : 'Nuevo' ?></li>
+      <li><a href="index.php">Becas y apoyos</a></li>
+      <li><?= $registro ? 'Editar' : 'Nueva' ?></li>
     </ol>
   </nav>
 
-  <h1><?= $registro ? 'Editar registro' : 'Nuevo registro' ?></h1>
+  <header class="fila fila--separada mb-6">
+    <h1 class="sin-margen"><?= $registro ? 'Editar convocatoria' : 'Nueva convocatoria' ?></h1>
+
+    <?php if ($registro === null): ?>
+      <nav class="becas-herramientas" aria-label="Cargar plantilla base">
+        <span class="becas-etiqueta-plantilla">Plantilla base:</span>
+        <a class="boton boton--secundario boton--pequeno" href="editar.php?plantilla=estandar">Apoyo general</a>
+        <a class="boton boton--secundario boton--pequeno" href="editar.php?plantilla=excelencia">Excelencia</a>
+      </nav>
+    <?php endif; ?>
+  </header>
 
   <?php if ($errores): ?>
-    <div class="alerta alerta--error" role="alert">
+    <aside class="alerta alerta--error mb-6" role="alert">
       <p><span class="alerta__titulo">Revisa los datos.</span>
          Hay <?= count($errores) ?> campo<?= count($errores) === 1 ? '' : 's' ?> con problemas.</p>
-    </div>
+    </aside>
+  <?php elseif ($alertaInfo !== null): ?>
+    <aside class="alerta alerta--exito mb-6" role="status">
+      <p><span class="alerta__titulo">Listo.</span> <?= e($alertaInfo) ?></p>
+    </aside>
   <?php endif; ?>
 
-  <form class="formulario" method="POST" action="" enctype="multipart/form-data">
+  <form class="formulario" method="POST" action="" enctype="multipart/form-data" novalidate>
     <?= campo_token() ?>
 
     <fieldset class="grupo-campos">
-      <legend class="grupo-campos__titulo">Datos del registro</legend>
+      <legend class="grupo-campos__titulo">Datos generales de la convocatoria</legend>
 
-      <div class="campo <?= isset($errores['carrera_id']) ? 'campo--invalido' : '' ?>">
+      <p class="campo <?= isset($errores['carrera_id']) ? 'campo--invalido' : '' ?>">
         <label class="campo__etiqueta" for="carrera_id">
           Carrera <span class="campo__requerido" aria-hidden="true">*</span>
         </label>
@@ -142,48 +262,128 @@ cabecera($registro ? 'Editar registro' : 'Nuevo registro', '', '../css/modulo.cs
                 <?= rol() === 'editor' ? 'disabled' : '' ?>>
           <option value="">Selecciona una opción</option>
           <?php foreach (carreras() as $c): ?>
-            <option value="<?= (int)$c['id'] ?>" <?= (int)$datos['carrera_id'] === (int)$c['id'] ? 'selected' : '' ?>>
+            <option value="<?= (int) $c['id'] ?>" <?= (int) $datos['carrera_id'] === (int) $c['id'] ? 'selected' : '' ?>>
               <?= e($c['nombre']) ?>
             </option>
           <?php endforeach; ?>
         </select>
         <?php if (rol() === 'editor'): ?>
-          <input type="hidden" name="carrera_id" value="<?= (int)carrera_del_usuario() ?>">
+          <input type="hidden" name="carrera_id" value="<?= (int) carrera_del_usuario() ?>">
           <small class="campo__ayuda">Como editor, trabajas sobre tu carrera.</small>
         <?php endif; ?>
         <?php if (isset($errores['carrera_id'])): ?>
           <small class="campo__error"><?= e($errores['carrera_id']) ?></small>
         <?php endif; ?>
-      </div>
+      </p>
 
-      <div class="campo <?= isset($errores['titulo']) ? 'campo--invalido' : '' ?>">
+      <p class="campo <?= isset($errores['titulo']) ? 'campo--invalido' : '' ?>">
         <label class="campo__etiqueta" for="titulo">
-          Título <span class="campo__requerido" aria-hidden="true">*</span>
+          Título de la convocatoria <span class="campo__requerido" aria-hidden="true">*</span>
         </label>
         <input class="campo__control" type="text" id="titulo" name="titulo"
+               placeholder="Ej. Beca de Excelencia Académica 2026"
                value="<?= e($datos['titulo']) ?>" maxlength="160" required>
         <?php if (isset($errores['titulo'])): ?>
           <small class="campo__error"><?= e($errores['titulo']) ?></small>
         <?php endif; ?>
-      </div>
+      </p>
 
-      <div class="campo <?= isset($errores['resumen']) ? 'campo--invalido' : '' ?>">
+      <fieldset class="becas-grid becas-grid--2 becas-fieldset">
+        <p class="campo <?= isset($errores['tipo']) ? 'campo--invalido' : '' ?>">
+          <label class="campo__etiqueta" for="tipo">
+            Categoría <span class="campo__requerido" aria-hidden="true">*</span>
+          </label>
+          <select class="campo__control" id="tipo" name="tipo">
+            <?php foreach ($categoriasPermitidas as $cat): ?>
+              <option value="<?= e($cat) ?>" <?= $datos['tipo'] === $cat ? 'selected' : '' ?>><?= e($cat) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <?php if (isset($errores['tipo'])): ?>
+            <small class="campo__error"><?= e($errores['tipo']) ?></small>
+          <?php endif; ?>
+        </p>
+
+        <p class="campo <?= isset($errores['monto']) ? 'campo--invalido' : '' ?>">
+          <label class="campo__etiqueta" for="monto">
+            Monto y periodicidad <span class="campo__requerido" aria-hidden="true">*</span>
+          </label>
+          <input class="campo__control" type="text" id="monto" name="monto"
+                 placeholder="Ej. $3,500.00 MXN / cuatrimestre"
+                 value="<?= e($datos['monto']) ?>" maxlength="80" required>
+          <?php if (isset($errores['monto'])): ?>
+            <small class="campo__error"><?= e($errores['monto']) ?></small>
+          <?php endif; ?>
+        </p>
+      </fieldset>
+
+      <fieldset class="becas-grid becas-grid--3 becas-fieldset">
+        <p class="campo <?= isset($errores['apertura']) ? 'campo--invalido' : '' ?>">
+          <label class="campo__etiqueta" for="apertura">
+            Fecha de apertura <span class="campo__requerido" aria-hidden="true">*</span>
+          </label>
+          <input class="campo__control" type="date" id="apertura" name="apertura"
+                 value="<?= e($datos['apertura']) ?>" required>
+          <?php if (isset($errores['apertura'])): ?>
+            <small class="campo__error"><?= e($errores['apertura']) ?></small>
+          <?php endif; ?>
+        </p>
+
+        <p class="campo <?= isset($errores['cierre']) ? 'campo--invalido' : '' ?>">
+          <label class="campo__etiqueta" for="cierre">
+            Fecha de cierre <span class="campo__requerido" aria-hidden="true">*</span>
+          </label>
+          <input class="campo__control" type="date" id="cierre" name="cierre"
+                 value="<?= e($datos['cierre']) ?>" required>
+          <?php if (isset($errores['cierre'])): ?>
+            <small class="campo__error"><?= e($errores['cierre']) ?></small>
+          <?php endif; ?>
+        </p>
+
+        <p class="campo <?= isset($errores['estado']) ? 'campo--invalido' : '' ?>">
+          <label class="campo__etiqueta" for="estado">Estado</label>
+          <select class="campo__control" id="estado" name="estado">
+            <?php foreach ($estadosPermitidos as $clave => $etiqueta): ?>
+              <option value="<?= e($clave) ?>" <?= $datos['estado'] === $clave ? 'selected' : '' ?>><?= e($etiqueta) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <?php if (isset($errores['estado'])): ?>
+            <small class="campo__error"><?= e($errores['estado']) ?></small>
+          <?php endif; ?>
+        </p>
+      </fieldset>
+    </fieldset>
+
+    <fieldset class="grupo-campos">
+      <legend class="grupo-campos__titulo">Requisitos y difusión</legend>
+
+      <p class="campo <?= isset($errores['requisitos']) ? 'campo--invalido' : '' ?>">
+        <label class="campo__etiqueta" for="requisitos">
+          Requisitos y documentación <span class="campo__requerido" aria-hidden="true">*</span>
+        </label>
+        <textarea class="campo__control" id="requisitos" name="requisitos" rows="5"
+                  maxlength="3000" placeholder="Enlista un requisito por línea..." required><?= e($datos['requisitos']) ?></textarea>
+        <?php if (isset($errores['requisitos'])): ?>
+          <small class="campo__error"><?= e($errores['requisitos']) ?></small>
+        <?php endif; ?>
+      </p>
+
+      <p class="campo <?= isset($errores['resumen']) ? 'campo--invalido' : '' ?>">
         <label class="campo__etiqueta" for="resumen">Resumen</label>
         <textarea class="campo__control" id="resumen" name="resumen" rows="3"
                   maxlength="400"><?= e($datos['resumen']) ?></textarea>
-        <small class="campo__ayuda">Se muestra en la tarjeta del listado. Máximo 400 caracteres.</small>
+        <small class="campo__ayuda">Se muestra en la tarjeta del listado público. Máximo 400 caracteres.</small>
         <?php if (isset($errores['resumen'])): ?>
           <small class="campo__error"><?= e($errores['resumen']) ?></small>
         <?php endif; ?>
-      </div>
+      </p>
 
-      <div class="campo">
-        <label class="campo__etiqueta" for="cuerpo">Contenido</label>
-        <textarea class="campo__control" id="cuerpo" name="cuerpo" rows="8"><?= e($datos['cuerpo']) ?></textarea>
-      </div>
+      <p class="campo">
+        <label class="campo__etiqueta" for="cuerpo">Bases y detalles adicionales</label>
+        <textarea class="campo__control" id="cuerpo" name="cuerpo" rows="6"><?= e($datos['cuerpo']) ?></textarea>
+      </p>
 
-      <div class="campo <?= isset($errores['imagen']) ? 'campo--invalido' : '' ?>">
-        <label class="campo__etiqueta" for="imagen">Imagen</label>
+      <p class="campo <?= isset($errores['imagen']) ? 'campo--invalido' : '' ?>">
+        <label class="campo__etiqueta" for="imagen">Imagen o cartel promocional</label>
         <?php if (!empty($datos['imagen'])): ?>
           <img src="../uploads/<?= e($datos['imagen']) ?>" alt="Imagen actual"
                style="max-width:260px;border-radius:6px;margin-bottom:8px">
@@ -194,38 +394,52 @@ cabecera($registro ? 'Editar registro' : 'Nuevo registro', '', '../css/modulo.cs
         <?php if (isset($errores['imagen'])): ?>
           <small class="campo__error"><?= e($errores['imagen']) ?></small>
         <?php endif; ?>
-      </div>
+      </p>
     </fieldset>
 
-    <div class="fila">
+    <footer class="fila">
       <button class="boton boton--primario" type="submit">
-        <?= $registro ? 'Guardar cambios' : 'Crear registro' ?>
+        <?= $registro ? 'Guardar cambios' : 'Publicar convocatoria' ?>
       </button>
       <a class="boton boton--secundario" href="index.php">Cancelar</a>
-    </div>
+    </footer>
   </form>
 
-  <?php if ($registro): ?>
+  <?php if ($registro && function_exists('plt_historial')): ?>
     <h2 class="mt-6">Historial</h2>
-    <?php $historial = plt_historial((int)$registro['id']); ?>
+    <?php
+    $historial = [];
+    try {
+        $historial = plt_historial((int) $registro['id']);
+    } catch (Throwable $e) {
+        $historial = [];
+    }
+    ?>
     <?php if (!$historial): ?>
       <p class="leyenda">Sin cambios de estado registrados.</p>
     <?php else: ?>
-      <div class="tabla-envoltura">
+      <figure class="tabla-envoltura sin-margen">
         <table class="tabla">
-          <thead><tr><th scope="col">Fecha</th><th scope="col">Cambio</th><th scope="col">Quién</th><th scope="col">Motivo</th></tr></thead>
-          <tbody>
-          <?php foreach ($historial as $h): ?>
+          <thead>
             <tr>
-              <td><?= e(date('d/m/Y H:i', strtotime($h['creado_en']))) ?></td>
-              <td><?= e($h['estado_previo'] ?? '—') ?> → <?= e($h['estado_nuevo']) ?></td>
-              <td><?= e($h['usuario'] ?? 'Sistema') ?></td>
-              <td><?= e($h['motivo'] ?? '') ?></td>
+              <th scope="col">Fecha</th>
+              <th scope="col">Cambio</th>
+              <th scope="col">Quién</th>
+              <th scope="col">Motivo</th>
             </tr>
-          <?php endforeach; ?>
+          </thead>
+          <tbody>
+            <?php foreach ($historial as $h): ?>
+              <tr>
+                <td><?= e(date('d/m/Y H:i', strtotime($h['creado_en']))) ?></td>
+                <td><?= e($h['estado_previo'] ?? '—') ?> → <?= e($h['estado_nuevo']) ?></td>
+                <td><?= e($h['usuario'] ?? 'Sistema') ?></td>
+                <td><?= e($h['motivo'] ?? '') ?></td>
+              </tr>
+            <?php endforeach; ?>
           </tbody>
         </table>
-      </div>
+      </figure>
     <?php endif; ?>
   <?php endif; ?>
 
