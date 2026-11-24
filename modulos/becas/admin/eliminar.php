@@ -75,8 +75,9 @@ if ($accion === 'eliminar_lote') {
                 continue;
             }
 
-            // Un editor solo puede purgar registros de su propia carrera
-            if (rol() === 'editor' && isset($reg['carrera_id']) && (int) $reg['carrera_id'] !== carrera_del_usuario()) {
+            // Un editor solo puede purgar registros de su propia carrera.
+            // Si el registro no incluye carrera_id, no se puede validar el permiso.
+            if (rol() === 'editor' && (!isset($reg['carrera_id']) || (int) $reg['carrera_id'] !== carrera_del_usuario())) {
                 continue;
             }
 
@@ -91,9 +92,8 @@ if ($accion === 'eliminar_lote') {
         error_log('Error en eliminación por lote: ' . $e->getMessage());
         mensaje('error', 'Algunos registros tienen información vinculada y no pudieron eliminarse.');
     } catch (Throwable $e) {
-        // Simulación mientras no exista la tabla SQL
-        $total = count($idsSeleccionados);
-        mensaje('exito', "Eliminación simulada: {$total} registro(s) eliminado(s) (sin base de datos).");
+        error_log('Error inesperado en eliminación por lote: ' . $e->getMessage());
+        mensaje('error', 'No se pudo completar la eliminación por un error de configuración o de base de datos.');
     }
 
     redirigir($rutaRetorno);
@@ -136,8 +136,8 @@ try {
     error_log('Error al eliminar: ' . $e->getMessage());
     mensaje('error', 'No se pudo eliminar: el registro tiene información asociada.');
 } catch (Throwable $e) {
-    // Respaldo simulado cuando aún no existe la tabla en MySQL
-    mensaje('exito', "Eliminación simulada del registro #{$id} (tabla SQL aún no creada).");
+    error_log('Error inesperado al eliminar el registro #' . $id . ': ' . $e->getMessage());
+    mensaje('error', 'No se pudo eliminar el registro por un error de configuración o de base de datos.');
 }
 
 redirigir($rutaRetorno);

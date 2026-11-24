@@ -33,79 +33,22 @@ $estado    = array_key_exists($estadoRaw, $estadosCatalogo) ? $estadoRaw : '';
 $carreraId = (rol() === 'editor') ? carrera_del_usuario() : entero(get('carrera'));
 $pagina    = max(1, entero(get('pagina')) ?? 1);
 
-$modoSimulado = false;
+$errorCarga = false;
 
 try {
     if (!function_exists('plt_listar')) {
         throw new RuntimeException('Función plt_listar aún no disponible.');
     }
     $resultado = plt_listar($busqueda, $estado, $carreraId, $pagina);
+  if (!is_array($resultado) || !isset($resultado['filas'], $resultado['total']) || !is_array($resultado['filas'])) {
+    throw new RuntimeException('La consulta de convocatorias devolvió un resultado inválido.');
+  }
 } catch (Throwable $e) {
-    // Respaldo simulado mientras la tabla SQL del módulo aún no existe en XAMPP
-    $modoSimulado = true;
-    $simulados = [
-        [
-            'id'             => 1,
-            'carrera_id'     => 1,
-            'carrera'        => 'Tecnologías de la Información',
-            'titulo'         => 'Beca de Excelencia Académica',
-            'monto'          => '$4,500.00 MXN / cuatrimestre',
-            'apertura'       => '2026-09-01',
-            'cierre'         => '2026-09-20',
-            'estado'         => 'activa',
-            'actualizado_en' => '2026-11-15 10:30:00',
-        ],
-        [
-            'id'             => 2,
-            'carrera_id'     => 1,
-            'carrera'        => 'Tecnologías de la Información',
-            'titulo'         => 'Apoyo de Manutención y Transporte',
-            'monto'          => '$2,800.00 MXN / bimestre',
-            'apertura'       => '2026-10-05',
-            'cierre'         => '2026-10-25',
-            'estado'         => 'activa',
-            'actualizado_en' => '2026-11-16 14:15:00',
-        ],
-        [
-            'id'             => 3,
-            'carrera_id'     => 3,
-            'carrera'        => 'Médico Cirujano',
-            'titulo'         => 'Beca de Movilidad e Intercambio Internacional',
-            'monto'          => '$18,000.00 MXN / pago único',
-            'apertura'       => '2026-11-15',
-            'cierre'         => '2026-12-10',
-            'estado'         => 'proxima',
-            'actualizado_en' => '2026-11-18 09:00:00',
-        ],
-        [
-            'id'             => 4,
-            'carrera_id'     => 2,
-            'carrera'        => 'Mantenimiento Industrial',
-            'titulo'         => 'Estímulo a Proyectos de Innovación Tecnológica',
-            'monto'          => '$6,000.00 MXN / proyecto',
-            'apertura'       => '2026-05-01',
-            'cierre'         => '2026-05-30',
-            'estado'         => 'cerrada',
-            'actualizado_en' => '2026-06-01 12:00:00',
-        ],
-    ];
-
-    $filasFiltradas = array_values(array_filter($simulados, static function (array $f) use ($busqueda, $estado, $carreraId): bool {
-        if ($carreraId !== null && (int) $f['carrera_id'] !== (int) $carreraId) {
-            return false;
-        }
-        if ($busqueda !== '' && mb_stripos($f['titulo'], $busqueda) === false && mb_stripos($f['carrera'], $busqueda) === false) {
-            return false;
-        }
-        if ($estado !== '' && $f['estado'] !== $estado) {
-            return false;
-        }
-        return true;
-    }));
-
+  // No mostrar filas ficticias ni permitir acciones sobre registros inexistentes.
+  $errorCarga = true;
     $resultado = [
-        'filas' => $filasFiltradas,
-        'total' => count($filasFiltradas),
+    'filas' => [],
+    'total' => 0,
     ];
 }
 
@@ -131,6 +74,12 @@ cabecera('Panel · Becas y apoyos', '', '../css/modulo.css');
   </header>
 
   <?php pintar_mensajes(); ?>
+
+  <?php if ($errorCarga): ?>
+    <div class="alerta alerta--error" role="alert">
+      No fue posible cargar las convocatorias desde la base de datos. Verifica la conexión y la configuración del módulo.
+    </div>
+  <?php endif; ?>
 
   <form class="panel mb-6" method="GET" action="">
     <fieldset class="fila becas-fieldset">
@@ -168,7 +117,6 @@ cabecera('Panel · Becas y apoyos', '', '../css/modulo.css');
       <table class="tabla">
         <caption>
           <?= (int) $resultado['total'] ?> convocatoria<?= (int) $resultado['total'] === 1 ? '' : 's' ?>
-          <?= $modoSimulado ? ' (vista previa sin base de datos)' : '' ?>
         </caption>
         <thead>
           <tr>

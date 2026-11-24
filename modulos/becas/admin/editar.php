@@ -171,43 +171,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errores['resumen'] = 'El resumen no puede pasar de 400 caracteres.';
     }
 
-    /* --- Imagen (opcional, de la plantilla de tus compañeros) ---------- */
-
-    if (!empty($_FILES['imagen']['name'])) {
-        try {
-            $nuevo = guardar_archivo($_FILES['imagen'], CARPETA_SUBIDAS, SOLO_IMAGEN, 2);
-
-            if (!empty($registro['imagen'])) {
-                @unlink(CARPETA_SUBIDAS . '/' . $registro['imagen']);
-            }
-
-            $datos['imagen'] = $nuevo;
-        } catch (RuntimeException $e) {
-            $errores['imagen'] = $e->getMessage();
-        }
-    }
-
-    /* --- Guardar (BD real si existe la tabla, o simulación segura) ----- */
-
+    /* --- Guardar en BD; no reportar éxito si falta la capa de consultas --- */
     if (!$errores) {
+      $imagenAnterior = $registro['imagen'] ?? null;
+      $imagenNueva = null;
         try {
+        if (!empty($_FILES['imagen']['name'])) {
+          $imagenNueva = guardar_archivo($_FILES['imagen'], CARPETA_SUBIDAS, SOLO_IMAGEN, 2);
+          $datos['imagen'] = $imagenNueva;
+        }
+
             if ($registro === null) {
-                if (function_exists('plt_crear')) {
-                    plt_crear($datos, usuario()['id']);
+          if (!function_exists('plt_crear')) {
+            throw new RuntimeException('No está disponible la función para guardar convocatorias.');
                 }
+          plt_crear($datos, usuario()['id']);
                 mensaje('exito', 'Convocatoria creada correctamente.');
             } else {
-                if (function_exists('plt_actualizar')) {
-                    plt_actualizar((int) $registro['id'], $datos);
+          if (!function_exists('plt_actualizar')) {
+            throw new RuntimeException('No está disponible la función para actualizar convocatorias.');
                 }
+          plt_actualizar((int) $registro['id'], $datos);
                 mensaje('exito', 'Cambios guardados correctamente.');
             }
 
+        if ($imagenNueva !== null && $imagenAnterior && $imagenAnterior !== $imagenNueva) {
+          @unlink(CARPETA_SUBIDAS . '/' . basename($imagenAnterior));
+        }
             redirigir('index.php');
         } catch (Throwable $e) {
-            // Respaldo mientras la tabla SQL del módulo aún no se crea en XAMPP
-            $accionTxt = $registro === null ? 'registrada' : 'actualizada';
-            $alertaInfo = "Convocatoria {$accionTxt} en modo simulación (la tabla SQL aún no está creada).";
+        if ($imagenNueva !== null) {
+          @unlink(CARPETA_SUBIDAS . '/' . basename($imagenNueva));
+          $datos['imagen'] = $imagenAnterior;
+        }
+        $errores['general'] = 'No fue posible guardar la convocatoria en la base de datos. Verifica la conexión y vuelve a intentarlo.';
         }
     }
 }
@@ -241,6 +238,7 @@ cabecera($registro ? 'Editar convocatoria' : 'Nueva convocatoria', '', '../css/m
     <aside class="alerta alerta--error mb-6" role="alert">
       <p><span class="alerta__titulo">Revisa los datos.</span>
          Hay <?= count($errores) ?> campo<?= count($errores) === 1 ? '' : 's' ?> con problemas.</p>
+      <?php if (isset($errores['general'])): ?><p><?= e($errores['general']) ?></p><?php endif; ?>
     </aside>
   <?php elseif ($alertaInfo !== null): ?>
     <aside class="alerta alerta--exito mb-6" role="status">
