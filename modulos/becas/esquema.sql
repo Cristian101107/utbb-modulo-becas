@@ -1,5 +1,5 @@
 -- =============================================================================
--- MÓDULO PLANTILLA · esquema.sql
+-- MÓDULO BEC · esquema.sql
 -- Explorador Vocacional UTBB
 --
 -- Copia este archivo a tu módulo y sustituye el prefijo plt_ por el tuyo.
@@ -13,82 +13,278 @@
 
 USE explorador_vocacional;
 
-SET NAMES utf8mb4;
+-- phpMyAdmin SQL Dump
+-- version 5.2.1
+-- https://www.phpmyadmin.net/
+--
+-- Servidor: 127.0.0.1:3307
+-- Tiempo de generación: 24-11-2026 a las 17:37:42
+-- Versión del servidor: 10.4.32-MariaDB
+-- Versión de PHP: 8.2.12
+
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
 
 
--- -----------------------------------------------------------------------------
--- Entidad principal del módulo
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS plt_elementos (
-    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    carrera_id  INT UNSIGNED NOT NULL,
-    titulo      VARCHAR(160) NOT NULL,
-    resumen     VARCHAR(400) NULL,
-    cuerpo      TEXT NULL,
-    imagen      VARCHAR(80) NULL,          -- nombre generado por el servidor
-    estado      ENUM('borrador','revision','publicado','rechazado','archivado')
-                NOT NULL DEFAULT 'borrador',
-    creado_por  INT UNSIGNED NULL,
-    creado_en   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
 
-    KEY ix_plt_elementos_estado (estado),
-    KEY ix_plt_elementos_carrera (carrera_id),
+--
+-- Base de datos: `explorador_vocacional`
+--
 
-    CONSTRAINT fk_plt_elementos_carrera
-        FOREIGN KEY (carrera_id) REFERENCES carreras(id)
-        ON UPDATE CASCADE ON DELETE RESTRICT,
+-- --------------------------------------------------------
 
-    CONSTRAINT fk_plt_elementos_usuario
-        FOREIGN KEY (creado_por) REFERENCES usuarios(id)
-        ON UPDATE CASCADE ON DELETE SET NULL
+--
+-- Estructura de tabla para la tabla `bec_dictamenes`
+--
+
+CREATE TABLE `bec_dictamenes` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `solicitud_id` int(10) UNSIGNED NOT NULL,
+  `revisor_id` int(10) UNSIGNED DEFAULT NULL,
+  `estado_previo` varchar(20) DEFAULT NULL,
+  `estado_nuevo` enum('enviada','en_revision','aprobada','rechazada') NOT NULL,
+  `observaciones` text NOT NULL,
+  `creado_en` datetime NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- --------------------------------------------------------
 
--- -----------------------------------------------------------------------------
--- Entidad secundaria · ejemplo de relación uno a muchos
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS plt_notas (
-    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    elemento_id INT UNSIGNED NOT NULL,
-    texto       VARCHAR(400) NOT NULL,
-    autor_id    INT UNSIGNED NULL,
-    creado_en   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+--
+-- Estructura de tabla para la tabla `bec_documentos`
+--
 
-    KEY ix_plt_notas_elemento (elemento_id),
-
-    CONSTRAINT fk_plt_notas_elemento
-        FOREIGN KEY (elemento_id) REFERENCES plt_elementos(id)
-        ON UPDATE CASCADE ON DELETE CASCADE
+CREATE TABLE `bec_documentos` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `solicitud_id` int(10) UNSIGNED NOT NULL,
+  `requisito_id` int(10) UNSIGNED DEFAULT NULL,
+  `nombre_original` varchar(200) NOT NULL,
+  `nombre_guardado` varchar(120) NOT NULL,
+  `tipo_mime` varchar(80) NOT NULL,
+  `tamano_bytes` int(10) UNSIGNED NOT NULL,
+  `subido_en` datetime NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- --------------------------------------------------------
 
--- -----------------------------------------------------------------------------
--- Bitácora de cambios de estado
--- Todo módulo con un proceso debe poder decir quién cambió qué y cuándo.
--- -----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS plt_historial (
-    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    elemento_id   INT UNSIGNED NOT NULL,
-    estado_previo VARCHAR(20) NULL,
-    estado_nuevo  VARCHAR(20) NOT NULL,
-    motivo        VARCHAR(300) NULL,
-    usuario_id    INT UNSIGNED NULL,
-    creado_en     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+--
+-- Estructura de tabla para la tabla `bec_programas`
+--
 
-    KEY ix_plt_historial_elemento (elemento_id),
-
-    CONSTRAINT fk_plt_historial_elemento
-        FOREIGN KEY (elemento_id) REFERENCES plt_elementos(id)
-        ON UPDATE CASCADE ON DELETE CASCADE
+CREATE TABLE `bec_programas` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `carrera_id` int(10) UNSIGNED DEFAULT NULL,
+  `nombre` varchar(160) NOT NULL,
+  `tipo` enum('academica','socioeconomica','deportiva','cultural','transporte','alimenticia') NOT NULL DEFAULT 'academica',
+  `descripcion` text NOT NULL,
+  `monto_apoyo` varchar(120) NOT NULL,
+  `promedio_minimo` decimal(3,1) NOT NULL DEFAULT 8.0,
+  `fecha_inicio` date NOT NULL,
+  `fecha_cierre` date NOT NULL,
+  `cupo` int(10) UNSIGNED DEFAULT NULL,
+  `activa` tinyint(1) NOT NULL DEFAULT 1,
+  `creado_por` int(10) UNSIGNED DEFAULT NULL,
+  `creado_en` datetime NOT NULL DEFAULT current_timestamp(),
+  `actualizado_en` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+--
+-- Volcado de datos para la tabla `bec_programas`
+--
 
--- -----------------------------------------------------------------------------
--- Datos de prueba
--- -----------------------------------------------------------------------------
-INSERT INTO plt_elementos (carrera_id, titulo, resumen, estado) VALUES
-    (1, 'Elemento publicado de ejemplo', 'Resumen breve que se muestra en la tarjeta.', 'publicado'),
-    (1, 'Elemento en revisión',          'Esperando dictamen de la coordinación.',      'revision'),
-    (3, 'Elemento en borrador',          'Todavía no se envía a revisión.',             'borrador'),
-    (7, 'Elemento rechazado',            'Se devolvió con observaciones.',              'rechazado');
+INSERT INTO `bec_programas` (`id`, `carrera_id`, `nombre`, `tipo`, `descripcion`, `monto_apoyo`, `promedio_minimo`, `fecha_inicio`, `fecha_cierre`, `cupo`, `activa`, `creado_por`, `creado_en`, `actualizado_en`) VALUES
+(1, NULL, 'Beca Académica', 'academica', 'Otorgada a estudiantes regulares con buen aprovechamiento escolar mediante convocatoria cuatrimestral.', 'Descuento en colegiatura · Desde 2do. cuatrimestre', 9.0, '2026-09-01', '2026-12-15', 100, 1, 1, '2026-11-24 10:25:13', '2026-11-24 10:25:13'),
+(2, NULL, 'Beca Socioeconómica', 'socioeconomica', 'Dirigida a alumnos regulares que se encuentran en una condición socioeconómica vulnerable.', 'Descuento en colegiatura · Desde 2do. cuatrimestre', 8.0, '2026-09-01', '2026-12-15', 80, 1, 1, '2026-11-24 10:25:13', '2026-11-24 10:25:13'),
+(3, NULL, 'Apoyo Extracurricular', 'deportiva', 'Para alumnos que hayan participado y sobresalido en actividades extracurriculares individuales o de conjunto.', 'Descuento en colegiatura · Desde 2do. cuatrimestre', 8.0, '2026-09-01', '2026-12-15', 50, 1, 1, '2026-11-24 10:25:13', '2026-11-24 10:25:13'),
+(4, NULL, 'Beca Alimenticia', 'alimenticia', 'Apoyo en el que se brinda un alimento y bebida diaria en la cafetería de la propia Universidad.', 'En especie · Cafetería Universitaria', 8.0, '2026-09-01', '2026-12-15', 120, 1, 1, '2026-11-24 10:25:13', '2026-11-24 10:25:13'),
+(5, NULL, 'Jóvenes Escribiendo el Futuro', 'federal', 'Programa federal que busca garantizar una educación inclusiva, equitativa y de calidad para estudiantes universitarios.', 'Becas Benito Juárez · Educación Superior', 8.0, '2026-09-01', '2026-12-15', NULL, 1, 1, '2026-11-24 10:25:13', '2026-11-24 10:25:13');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `bec_requisitos`
+--
+
+CREATE TABLE `bec_requisitos` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `programa_id` int(10) UNSIGNED NOT NULL,
+  `nombre` varchar(160) NOT NULL,
+  `descripcion` varchar(300) DEFAULT NULL,
+  `obligatorio` tinyint(1) NOT NULL DEFAULT 1,
+  `tipo_archivo` enum('pdf','imagen','ambos','ninguno') NOT NULL DEFAULT 'pdf',
+  `orden` tinyint(3) UNSIGNED NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Volcado de datos para la tabla `bec_requisitos`
+--
+
+INSERT INTO `bec_requisitos` (`id`, `programa_id`, `nombre`, `descripcion`, `obligatorio`, `tipo_archivo`, `orden`) VALUES
+(1, 1, 'Estudiante regular (2do. cuatrimestre)', 'Ser estudiante regular inscrito a partir de 2do. cuatrimestre.', 1, 'pdf', 1),
+(2, 1, 'Promedio mínimo de 9.0', 'Contar con promedio mínimo de 9.0 sin materias reprobadas ni extraordinarios (Kardex oficial).', 1, 'pdf', 2),
+(3, 1, 'Sin otro apoyo vigente', 'No contar con otro apoyo o beca institucional vigente.', 1, 'ninguno', 3),
+(4, 1, 'Registro en fechas de convocatoria', 'Realizar el registro dentro de las fechas establecidas en la convocatoria.', 1, 'ninguno', 4),
+(5, 2, 'Estudiante regular (2do. cuatrimestre)', 'Ser estudiante regular a partir de 2do. cuatrimestre.', 1, 'pdf', 1),
+(6, 2, 'Promedio mínimo de 8.0', 'Promedio mínimo de 8.0 en el cuatrimestre anterior.', 1, 'pdf', 2),
+(7, 2, 'Comprobante de ingresos y estudio socioeconómico', 'Entregar comprobante de ingresos familiares y formato de estudio socioeconómico.', 1, 'pdf', 3),
+(8, 2, 'Sin adeudos institucionales', 'No tener adeudos administrativos o de biblioteca con la institución.', 1, 'ninguno', 4),
+(9, 3, 'Estudiante regular (2do. cuatrimestre)', 'Ser estudiante regular a partir de 2do. cuatrimestre.', 1, 'pdf', 1),
+(10, 3, 'Participación extracurricular sobresaliente', 'Haber participado y sobresalido en actividades deportivas, culturales o cívicas representativas.', 1, 'ambos', 2),
+(11, 3, 'Constancia o aval institucional', 'Contar con constancia o aval del área de Actividades Culturales y Deportivas.', 1, 'pdf', 3),
+(12, 3, 'Promedio mínimo de 8.0', 'Mantener promedio mínimo de 8.0 en el cuatrimestre inmediato anterior.', 1, 'pdf', 4),
+(13, 4, 'Estudiante regular (2do. cuatrimestre)', 'Estar inscrito como alumno regular a partir de 2do. cuatrimestre.', 1, 'pdf', 1),
+(14, 4, 'Solicitud oficial de necesidad económica', 'Acreditar necesidad económica mediante solicitud oficial.', 1, 'pdf', 2),
+(15, 4, 'Asistencia regular a clases', 'Mantener asistencia regular a clases durante el cuatrimestre vigente.', 1, 'ninguno', 3),
+(16, 5, 'Matrícula y ficha escolar SUBES', 'Tener matrícula activa y ficha escolar activada en el portal SUBES.', 1, 'pdf', 1),
+(17, 5, 'Criterios de priorización federal', 'Cumplir con los criterios de priorización publicados en la convocatoria federal vigente.', 1, 'ninguno', 2),
+(18, 5, 'Cuenta bancaria CLABE activa', 'Registrar una cuenta bancaria CLABE activa a nombre del beneficiario.', 1, 'pdf', 3);
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `bec_solicitudes`
+--
+
+CREATE TABLE `bec_solicitudes` (
+  `id` int(10) UNSIGNED NOT NULL,
+  `folio` varchar(30) NOT NULL,
+  `programa_id` int(10) UNSIGNED NOT NULL,
+  `usuario_id` int(10) UNSIGNED NOT NULL,
+  `carrera_id` int(10) UNSIGNED NOT NULL,
+  `promedio_actual` decimal(3,1) NOT NULL,
+  `motivo` text NOT NULL,
+  `estado` enum('borrador','enviada','en_revision','aprobada','rechazada') NOT NULL DEFAULT 'borrador',
+  `creado_en` datetime NOT NULL DEFAULT current_timestamp(),
+  `enviado_en` datetime DEFAULT NULL,
+  `actualizado_en` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Índices para tablas volcadas
+--
+
+--
+-- Indices de la tabla `bec_dictamenes`
+--
+ALTER TABLE `bec_dictamenes`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `ix_bec_dictamenes_solicitud` (`solicitud_id`),
+  ADD KEY `fk_bec_dictamenes_revisor` (`revisor_id`);
+
+--
+-- Indices de la tabla `bec_documentos`
+--
+ALTER TABLE `bec_documentos`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `ix_bec_documentos_solicitud` (`solicitud_id`),
+  ADD KEY `fk_bec_documentos_requisito` (`requisito_id`);
+
+--
+-- Indices de la tabla `bec_programas`
+--
+ALTER TABLE `bec_programas`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `ix_bec_programas_activa` (`activa`),
+  ADD KEY `ix_bec_programas_tipo` (`tipo`),
+  ADD KEY `ix_bec_programas_carrera` (`carrera_id`),
+  ADD KEY `fk_bec_programas_usuario` (`creado_por`);
+
+--
+-- Indices de la tabla `bec_requisitos`
+--
+ALTER TABLE `bec_requisitos`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `ix_bec_requisitos_programa` (`programa_id`);
+
+--
+-- Indices de la tabla `bec_solicitudes`
+--
+ALTER TABLE `bec_solicitudes`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uq_bec_solicitudes_folio` (`folio`),
+  ADD UNIQUE KEY `uq_bec_usuario_programa` (`usuario_id`,`programa_id`),
+  ADD KEY `ix_bec_solicitudes_estado` (`estado`),
+  ADD KEY `ix_bec_solicitudes_programa` (`programa_id`),
+  ADD KEY `fk_bec_solicitudes_carrera` (`carrera_id`);
+
+--
+-- AUTO_INCREMENT de las tablas volcadas
+--
+
+--
+-- AUTO_INCREMENT de la tabla `bec_dictamenes`
+--
+ALTER TABLE `bec_dictamenes`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT de la tabla `bec_documentos`
+--
+ALTER TABLE `bec_documentos`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT de la tabla `bec_programas`
+--
+ALTER TABLE `bec_programas`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+
+--
+-- AUTO_INCREMENT de la tabla `bec_requisitos`
+--
+ALTER TABLE `bec_requisitos`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
+
+--
+-- AUTO_INCREMENT de la tabla `bec_solicitudes`
+--
+ALTER TABLE `bec_solicitudes`
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- Restricciones para tablas volcadas
+--
+
+--
+-- Filtros para la tabla `bec_dictamenes`
+--
+ALTER TABLE `bec_dictamenes`
+  ADD CONSTRAINT `fk_bec_dictamenes_revisor` FOREIGN KEY (`revisor_id`) REFERENCES `usuarios` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_bec_dictamenes_solicitud` FOREIGN KEY (`solicitud_id`) REFERENCES `bec_solicitudes` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Filtros para la tabla `bec_documentos`
+--
+ALTER TABLE `bec_documentos`
+  ADD CONSTRAINT `fk_bec_documentos_requisito` FOREIGN KEY (`requisito_id`) REFERENCES `bec_requisitos` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_bec_documentos_solicitud` FOREIGN KEY (`solicitud_id`) REFERENCES `bec_solicitudes` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Filtros para la tabla `bec_programas`
+--
+ALTER TABLE `bec_programas`
+  ADD CONSTRAINT `fk_bec_programas_carrera` FOREIGN KEY (`carrera_id`) REFERENCES `carreras` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_bec_programas_usuario` FOREIGN KEY (`creado_por`) REFERENCES `usuarios` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+--
+-- Filtros para la tabla `bec_requisitos`
+--
+ALTER TABLE `bec_requisitos`
+  ADD CONSTRAINT `fk_bec_requisitos_programa` FOREIGN KEY (`programa_id`) REFERENCES `bec_programas` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Filtros para la tabla `bec_solicitudes`
+--
+ALTER TABLE `bec_solicitudes`
+  ADD CONSTRAINT `fk_bec_solicitudes_carrera` FOREIGN KEY (`carrera_id`) REFERENCES `carreras` (`id`) ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_bec_solicitudes_programa` FOREIGN KEY (`programa_id`) REFERENCES `bec_programas` (`id`) ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_bec_solicitudes_usuario` FOREIGN KEY (`usuario_id`) REFERENCES `usuarios` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+COMMIT;
+
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
