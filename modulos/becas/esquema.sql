@@ -61,8 +61,7 @@ CREATE TABLE `bec_dictamenes` (
 CREATE TABLE `bec_documentos` (
   `id` int(10) UNSIGNED NOT NULL,
   `solicitud_id` int(10) UNSIGNED NOT NULL,
-  `requisito_id` int(10) UNSIGNED DEFAULT NULL,
-  `nombre_original` varchar(200) NOT NULL,
+  `tipo_documento` enum('identificacion','kardex') NOT NULL,
   `nombre_guardado` varchar(120) NOT NULL,
   `tipo_mime` varchar(80) NOT NULL,
   `tamano_bytes` int(10) UNSIGNED NOT NULL,
@@ -79,7 +78,7 @@ CREATE TABLE `bec_programas` (
   `id` int(10) UNSIGNED NOT NULL,
   `carrera_id` int(10) UNSIGNED DEFAULT NULL,
   `nombre` varchar(160) NOT NULL,
-  `tipo` enum('academica','socioeconomica','deportiva','cultural','transporte','alimenticia') NOT NULL DEFAULT 'academica',
+  `tipo` enum('academica','socioeconomica','deportiva','cultural','transporte','alimenticia','federal') NOT NULL DEFAULT 'academica',
   `descripcion` text NOT NULL,
   `monto_apoyo` varchar(120) NOT NULL,
   `promedio_minimo` decimal(3,1) NOT NULL DEFAULT 8.0,
@@ -155,6 +154,9 @@ CREATE TABLE `bec_solicitudes` (
   `programa_id` int(10) UNSIGNED NOT NULL,
   `usuario_id` int(10) UNSIGNED NOT NULL,
   `carrera_id` int(10) UNSIGNED NOT NULL,
+  `matricula` varchar(20) DEFAULT NULL,
+  `telefono` varchar(20) DEFAULT NULL,
+  `cuatrimestre` tinyint(3) UNSIGNED DEFAULT NULL,
   `promedio_actual` decimal(3,1) NOT NULL,
   `motivo` text NOT NULL,
   `estado` enum('borrador','enviada','en_revision','aprobada','rechazada') NOT NULL DEFAULT 'borrador',
@@ -180,8 +182,7 @@ ALTER TABLE `bec_dictamenes`
 --
 ALTER TABLE `bec_documentos`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `ix_bec_documentos_solicitud` (`solicitud_id`),
-  ADD KEY `fk_bec_documentos_requisito` (`requisito_id`);
+  ADD KEY `ix_bec_documentos_solicitud` (`solicitud_id`);
 
 --
 -- Indices de la tabla `bec_programas`
@@ -260,7 +261,6 @@ ALTER TABLE `bec_dictamenes`
 -- Filtros para la tabla `bec_documentos`
 --
 ALTER TABLE `bec_documentos`
-  ADD CONSTRAINT `fk_bec_documentos_requisito` FOREIGN KEY (`requisito_id`) REFERENCES `bec_requisitos` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_bec_documentos_solicitud` FOREIGN KEY (`solicitud_id`) REFERENCES `bec_solicitudes` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
