@@ -2,8 +2,6 @@
 /**
  * MÓDULO BECAS · Panel de administración
  * Explorador Vocacional UTBB
- *
- * La verificación de rol es la PRIMERA instrucción ejecutable.
  */
 
 declare(strict_types=1);
@@ -16,96 +14,47 @@ if (file_exists(__DIR__ . '/../includes/consultas.php')) {
     require_once __DIR__ . '/../includes/consultas.php';
 }
 
-// Catálogo de estados (combina los de consultas.php si existen con los de becas)
-$estadosCatalogo = defined('PLT_ESTADOS') ? PLT_ESTADOS : [
-    'borrador' => 'Borrador',
-    'proxima'  => 'Próxima',
-    'activa'   => 'Activa',
-    'cerrada'  => 'Cerrada',
-];
+$estadosCatalogo = defined('BEC_ESTADOS')
+    ? BEC_ESTADOS
+    : (defined('PLT_ESTADOS') ? PLT_ESTADOS : [
+        'borrador' => 'Borrador',
+        'proxima'  => 'Próxima',
+        'activa'   => 'Activa',
+        'cerrada'  => 'Cerrada',
+    ]);
 
-// Sanitización y lista blanca en filtros GET
 $busqueda  = mb_substr(trim((string) get('q')), 0, 100);
 $estadoRaw = trim((string) get('estado'));
 $estado    = array_key_exists($estadoRaw, $estadosCatalogo) ? $estadoRaw : '';
 
-// Un editor solo ve lo de su carrera (restricción aplicada en el servidor).
+// Un editor solo ve lo de su carrera.
 $carreraId = (rol() === 'editor') ? carrera_del_usuario() : entero(get('carrera'));
 $pagina    = max(1, entero(get('pagina')) ?? 1);
 
-$modoSimulado = false;
+$errorCarga   = false;
+$detalleError = '';
 
 try {
-    if (!function_exists('plt_listar')) {
-        throw new RuntimeException('Función plt_listar aún no disponible.');
+    $fnListar = function_exists('bec_listar')
+        ? 'bec_listar'
+        : (function_exists('plt_listar') ? 'plt_listar' : null);
+
+    if ($fnListar === null) {
+        throw new RuntimeException('No se encontró bec_listar() ni plt_listar() en includes/consultas.php.');
     }
-    $resultado = plt_listar($busqueda, $estado, $carreraId, $pagina);
+
+    $resultado = $fnListar($busqueda, $estado, $carreraId, $pagina);
+
+    if (!is_array($resultado) || !isset($resultado['filas'], $resultado['total']) || !is_array($resultado['filas'])) {
+        throw new RuntimeException('La consulta de convocatorias devolvió una estructura inválida.');
+    }
 } catch (Throwable $e) {
-    // Respaldo simulado mientras la tabla SQL del módulo aún no existe en XAMPP
-    $modoSimulado = true;
-    $simulados = [
-        [
-            'id'             => 1,
-            'carrera_id'     => 1,
-            'carrera'        => 'Tecnologías de la Información',
-            'titulo'         => 'Beca de Excelencia Académica',
-            'monto'          => '$4,500.00 MXN / cuatrimestre',
-            'apertura'       => '2026-09-01',
-            'cierre'         => '2026-09-20',
-            'estado'         => 'activa',
-            'actualizado_en' => '2026-11-15 10:30:00',
-        ],
-        [
-            'id'             => 2,
-            'carrera_id'     => 1,
-            'carrera'        => 'Tecnologías de la Información',
-            'titulo'         => 'Apoyo de Manutención y Transporte',
-            'monto'          => '$2,800.00 MXN / bimestre',
-            'apertura'       => '2026-10-05',
-            'cierre'         => '2026-10-25',
-            'estado'         => 'activa',
-            'actualizado_en' => '2026-11-16 14:15:00',
-        ],
-        [
-            'id'             => 3,
-            'carrera_id'     => 3,
-            'carrera'        => 'Médico Cirujano',
-            'titulo'         => 'Beca de Movilidad e Intercambio Internacional',
-            'monto'          => '$18,000.00 MXN / pago único',
-            'apertura'       => '2026-11-15',
-            'cierre'         => '2026-12-10',
-            'estado'         => 'proxima',
-            'actualizado_en' => '2026-11-18 09:00:00',
-        ],
-        [
-            'id'             => 4,
-            'carrera_id'     => 2,
-            'carrera'        => 'Mantenimiento Industrial',
-            'titulo'         => 'Estímulo a Proyectos de Innovación Tecnológica',
-            'monto'          => '$6,000.00 MXN / proyecto',
-            'apertura'       => '2026-05-01',
-            'cierre'         => '2026-05-30',
-            'estado'         => 'cerrada',
-            'actualizado_en' => '2026-06-01 12:00:00',
-        ],
-    ];
-
-    $filasFiltradas = array_values(array_filter($simulados, static function (array $f) use ($busqueda, $estado, $carreraId): bool {
-        if ($carreraId !== null && (int) $f['carrera_id'] !== (int) $carreraId) {
-            return false;
-        }
-        if ($busqueda !== '' && mb_stripos($f['titulo'], $busqueda) === false && mb_stripos($f['carrera'], $busqueda) === false) {
-            return false;
-        }
-        if ($estado !== '' && $f['estado'] !== $estado) {
-            return false;
-        }
-        return true;
-    }));
-
+    $errorCarga   = true;
+    $detalleError = $e->getMessage();
+    error_log('Error al listar becas: ' . $detalleError);
     $resultado = [
-        'filas' => $filasFiltradas,
-        'total' => count($filasFiltradas),
+        'filas' => [],
+        'total' => 0,
     ];
 }
 
@@ -131,6 +80,15 @@ cabecera('Panel · Becas y apoyos', '', '../css/modulo.css');
   </header>
 
   <?php pintar_mensajes(); ?>
+
+  <?php if ($errorCarga): ?>
+    <aside class="alerta alerta--error mb-6" role="alert">
+      <p>No fue posible cargar las convocatorias desde la base de datos. Verifica la conexión y la configuración del módulo.</p>
+      <?php if (defined('DESARROLLO') && DESARROLLO && $detalleError !== ''): ?>
+        <p><small>Detalle técnico: <?= e($detalleError) ?></small></p>
+      <?php endif; ?>
+    </aside>
+  <?php endif; ?>
 
   <form class="panel mb-6" method="GET" action="">
     <fieldset class="fila becas-fieldset">
@@ -168,7 +126,6 @@ cabecera('Panel · Becas y apoyos', '', '../css/modulo.css');
       <table class="tabla">
         <caption>
           <?= (int) $resultado['total'] ?> convocatoria<?= (int) $resultado['total'] === 1 ? '' : 's' ?>
-          <?= $modoSimulado ? ' (vista previa sin base de datos)' : '' ?>
         </caption>
         <thead>
           <tr>
@@ -183,33 +140,42 @@ cabecera('Panel · Becas y apoyos', '', '../css/modulo.css');
         </thead>
         <tbody>
           <?php foreach ($resultado['filas'] as $f): ?>
+            <?php
+            $apertura = $f['apertura'] ?? $f['fecha_apertura'] ?? $f['fecha_inicio'] ?? '';
+            $cierre   = $f['cierre']   ?? $f['fecha_cierre']   ?? $f['fecha_fin']    ?? '';
+            $monto    = $f['monto']    ?? $f['apoyo']          ?? '—';
+            ?>
             <tr>
-              <td><strong><?= e($f['titulo']) ?></strong></td>
-              <td><?= e($f['carrera'] ?? 'General') ?></td>
-              <td><?= e($f['monto'] ?? '—') ?></td>
+              <td><strong><?= e((string) ($f['titulo'] ?? '')) ?></strong></td>
+              <td><?= e((string) ($f['carrera'] ?? 'General')) ?></td>
+              <td><?= e((string) $monto) ?></td>
               <td>
-                <?php if (!empty($f['apertura']) && !empty($f['cierre'])): ?>
-                  <time datetime="<?= e($f['apertura']) ?>"><?= e(date('d/m/Y', strtotime($f['apertura']))) ?></time>
+                <?php if ($apertura !== '' && $cierre !== ''): ?>
+                  <time datetime="<?= e((string) $apertura) ?>"><?= e(date('d/m/Y', strtotime((string) $apertura))) ?></time>
                   –
-                  <time datetime="<?= e($f['cierre']) ?>"><?= e(date('d/m/Y', strtotime($f['cierre']))) ?></time>
+                  <time datetime="<?= e((string) $cierre) ?>"><?= e(date('d/m/Y', strtotime((string) $cierre))) ?></time>
                 <?php else: ?>
                   —
                 <?php endif; ?>
               </td>
               <td>
                 <?php
-                $claveEstado  = (string) ($f['estado'] ?? 'borrador');
-                $claseEstado  = function_exists('plt_clase_estado')
-                    ? plt_clase_estado($claveEstado)
-                    : 'beca-estado beca-estado--' . $claveEstado;
-                $textoEstado  = $estadosCatalogo[$claveEstado] ?? $claveEstado;
+                $claveEstado = (string) ($f['estado'] ?? 'borrador');
+                if (function_exists('bec_clase_estado')) {
+                    $claseEstado = bec_clase_estado($claveEstado);
+                } elseif (function_exists('plt_clase_estado')) {
+                    $claseEstado = plt_clase_estado($claveEstado);
+                } else {
+                    $claseEstado = 'beca-estado beca-estado--' . $claveEstado;
+                }
+                $textoEstado = $estadosCatalogo[$claveEstado] ?? $claveEstado;
                 ?>
                 <span class="<?= e($claseEstado) ?>"><?= e($textoEstado) ?></span>
               </td>
               <td>
                 <?php if (!empty($f['actualizado_en'])): ?>
-                  <time datetime="<?= e($f['actualizado_en']) ?>">
-                    <?= e(date('d/m/Y H:i', strtotime($f['actualizado_en']))) ?>
+                  <time datetime="<?= e((string) $f['actualizado_en']) ?>">
+                    <?= e(date('d/m/Y H:i', strtotime((string) $f['actualizado_en']))) ?>
                   </time>
                 <?php else: ?>
                   —
