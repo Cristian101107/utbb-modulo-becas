@@ -11,16 +11,32 @@ require_once __DIR__ . '/../../../nucleo/comun.php';
 // 1. Verificación de rol obligatoria
 requerir_rol('editor', 'coordinacion');
 
-$diasPermitidos    = [30, 60, 90, 180];
-$estadosPermitidos = ['cerrada'];
+if (file_exists(__DIR__ . '/../includes/consultas.php')) {
+    require_once __DIR__ . '/../includes/consultas.php';
+}
 
-/** Encuentra la tabla y las columnas reales de convocatorias sin depender de datos de ejemplo. */
-function conexion_becas_depuracion() {
-    foreach (['pdo', 'conexion', 'db', 'mysqli', 'conn'] as $nombre) {
-        if (isset($GLOBALS[$nombre]) && is_object($GLOBALS[$nombre])) {
+$diasPermitidos    = [30, 60, 90, 180];
+$estadosPermitidos = ['cerrada', 'aceptada_vencida', 'rechazada'];
+
+/** Obtiene la conexión PDO oficial del núcleo mediante bd(). */
+function conexion_becas_depuracion(): ?\PDO {
+    try {
+        if (function_exists('bd')) {
+            $pdo = bd();
+            if ($pdo instanceof \PDO) {
+                return $pdo;
+            }
+        }
+    } catch (\Throwable $e) {
+        error_log('Error al conectar con bd() en depuracion.php: ' . $e->getMessage());
+    }
+
+    foreach (['pdo', 'conexion', 'db', 'conn'] as $nombre) {
+        if (isset($GLOBALS[$nombre]) && $GLOBALS[$nombre] instanceof \PDO) {
             return $GLOBALS[$nombre];
         }
     }
+
     return null;
 }
 
@@ -31,35 +47,22 @@ function identificador_sql_depuracion(string $identificador): ?string {
         : null;
 }
 
-function tablas_convocatorias_depuracion($conexion): array {
+function tablas_convocatorias_depuracion(\PDO $conexion): array {
     $candidatas = [];
 
     try {
-        if ($conexion instanceof \PDO) {
-            $filas = $conexion->query("SHOW TABLES")?->fetchAll(\PDO::FETCH_COLUMN);
-        } elseif (method_exists($conexion, 'query')) {
-            $resultado = $conexion->query('SHOW TABLES');
-            $filas = [];
-            if ($resultado) {
-                while ($fila = $resultado->fetch_row()) {
-                    $filas[] = $fila[0];
-                }
-            }
-        } else {
-            $filas = [];
-        }
-
-        foreach (($filas ?: []) as $tabla) {
+        $filas = $conexion->query('SHOW TABLES')?->fetchAll(\PDO::FETCH_COLUMN) ?: [];
+        foreach ($filas as $tabla) {
             $nombre = strtolower((string) $tabla);
-            if (str_contains($nombre, 'convocatoria')) {
+            if (str_contains($nombre, 'convocatoria') || str_starts_with($nombre, 'bec_')) {
                 $candidatas[] = (string) $tabla;
             }
         }
     } catch (\Throwable) {
     }
 
-    if (empty($candidatas)) {
-        foreach (['convocatorias', 'becas_convocatorias', 'convocatoria', 'becas_convocatoria'] as $tabla) {
+    foreach (['bec_convocatorias', 'convocatorias', 'becas_convocatorias', 'bec_becas'] as $tabla) {
+        if (!in_array($tabla, $candidatas, true)) {
             $candidatas[] = $tabla;
         }
     }
@@ -70,73 +73,69 @@ function tablas_convocatorias_depuracion($conexion): array {
 function cargar_convocatorias_depuracion(): array {
     $conexion = conexion_becas_depuracion();
     if ($conexion === null) {
-        return ['tabla' => null, 'id' => null, 'registros' => []];
+        return ['tabla' => null, 'id' => null, 'tiene_carrera' => false, 'registros' => []];
     }
 
     foreach (tablas_convocatorias_depuracion($conexion) as $tabla) {
+        $tablaSegura = identificador_sql_depuracion((string) $tabla);
+        if ($tablaSegura === null) {
+            continue;
+        }
+
         try {
-            if ($conexion instanceof \PDO) {
-                $sentencia = $conexion->prepare('SHOW COLUMNS FROM `' . str_replace('`', '', $tabla) . '`');
-                $sentencia->execute();
-                $columnas = $sentencia->fetchAll(\PDO::FETCH_COLUMN);
-            } else {
-                $resultado = $conexion->query('SHOW COLUMNS FROM `' . str_replace('`', '', $tabla) . '`');
-                $columnas = [];
-                if ($resultado) {
-                    while ($fila = $resultado->fetch_assoc()) {
-                        $columnas[] = $fila['Field'];
-                    }
-                }
-            }
+            $sentencia = $conexion->query('SHOW COLUMNS FROM `' . $tablaSegura . '`');
+            $columnas  = $sentencia ? $sentencia->fetchAll(\PDO::FETCH_COLUMN) : [];
 
             $normalizadas = [];
             foreach ($columnas as $columna) {
                 $normalizadas[strtolower((string) $columna)] = (string) $columna;
             }
 
-            $columnaId = $normalizadas['id_convocatoria'] ?? $normalizadas['id'] ?? null;
-            $columnaTitulo = $normalizadas['titulo'] ?? $normalizadas['nombre'] ?? $normalizadas['titulo_convocatoria'] ?? null;
-            $columnaVencimiento = $normalizadas['fecha_vencimiento'] ?? $normalizadas['fecha_cierre'] ?? $normalizadas['fecha_fin'] ?? $normalizadas['vencimiento'] ?? $normalizadas['cierre'] ?? null;
-            $columnaEstado = $normalizadas['estado'] ?? $normalizadas['estatus'] ?? $normalizadas['status'] ?? $normalizadas['situacion'] ?? null;
+            $columnaId          = $normalizadas['id'] ?? $normalizadas['id_convocatoria'] ?? null;
+            $columnaTitulo      = $normalizadas['titulo'] ?? $normalizadas['nombre'] ?? $normalizadas['titulo_convocatoria'] ?? null;
+            $columnaVencimiento = $normalizadas['cierre'] ?? $normalizadas['fecha_cierre'] ?? $normalizadas['fecha_vencimiento'] ?? $normalizadas['fecha_fin'] ?? $normalizadas['fecha_limite'] ?? null;
+            $columnaEstado      = $normalizadas['estado'] ?? $normalizadas['estatus'] ?? null;
+            $columnaCarrera     = $normalizadas['carrera_id'] ?? null;
 
             if ($columnaId === null || $columnaTitulo === null || $columnaVencimiento === null) {
                 continue;
             }
 
-            $tablaSegura = identificador_sql_depuracion((string) $tabla);
-            $columnaIdSegura = identificador_sql_depuracion((string) $columnaId);
-            $columnaTituloSegura = identificador_sql_depuracion((string) $columnaTitulo);
-            $columnaVencimientoSegura = identificador_sql_depuracion((string) $columnaVencimiento);
-            $columnaEstadoSegura = $columnaEstado !== null
-                ? identificador_sql_depuracion((string) $columnaEstado)
-                : null;
+            $colIdSeg     = identificador_sql_depuracion($columnaId);
+            $colTituloSeg = identificador_sql_depuracion($columnaTitulo);
+            $colVencSeg   = identificador_sql_depuracion($columnaVencimiento);
+            $colEstSeg    = $columnaEstado !== null ? identificador_sql_depuracion($columnaEstado) : null;
+            $colCarrSeg   = $columnaCarrera !== null ? identificador_sql_depuracion($columnaCarrera) : null;
 
-            if ($tablaSegura === null || $columnaIdSegura === null || $columnaTituloSegura === null || $columnaVencimientoSegura === null) {
+            if ($colIdSeg === null || $colTituloSeg === null || $colVencSeg === null) {
                 continue;
             }
 
-            $sql = 'SELECT `' . $columnaIdSegura . '`, `' . $columnaTituloSegura . '`, `' . $columnaVencimientoSegura . '`';
-            if ($columnaEstadoSegura !== null) {
-                $sql .= ', `' . $columnaEstadoSegura . '`';
+            $campos = ['`' . $colIdSeg . '`', '`' . $colTituloSeg . '`', '`' . $colVencSeg . '`'];
+            if ($colEstSeg !== null) {
+                $campos[] = '`' . $colEstSeg . '`';
             }
-            $sql .= ' FROM `' . $tablaSegura . '`';
-            if ($conexion instanceof \PDO) {
-                $filas = $conexion->query($sql)->fetchAll(\PDO::FETCH_ASSOC);
-            } else {
-                $resultado = $conexion->query($sql);
-                $filas = [];
-                if ($resultado) {
-                    while ($fila = $resultado->fetch_assoc()) {
-                        $filas[] = $fila;
-                    }
-                }
+            if ($colCarrSeg !== null) {
+                $campos[] = '`' . $colCarrSeg . '`';
             }
 
-            $registros = [];
+            $sql   = 'SELECT ' . implode(', ', $campos) . ' FROM `' . $tablaSegura . '`';
+            $filas = $conexion->query($sql)?->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+
+            $carreraUsuario = (rol() === 'editor') ? carrera_del_usuario() : null;
+            $registros      = [];
+
             foreach ($filas as $fila) {
                 $id = (int) ($fila[$columnaId] ?? 0);
                 if ($id <= 0) {
                     continue;
+                }
+
+                // Restricción por carrera para rol editor
+                if ($carreraUsuario !== null && $columnaCarrera !== null) {
+                    if ((int) ($fila[$columnaCarrera] ?? 0) !== (int) $carreraUsuario) {
+                        continue;
+                    }
                 }
 
                 $fecha = trim((string) ($fila[$columnaVencimiento] ?? ''));
@@ -144,14 +143,12 @@ function cargar_convocatorias_depuracion(): array {
                     continue;
                 }
 
-                $estadoRaw = $columnaEstado !== null
-                    ? mb_strtolower(trim((string) ($fila[$columnaEstado] ?? '')))
-                    : 'cerrada';
+                $estadoTexto = $columnaEstado !== null ? trim((string) ($fila[$columnaEstado] ?? '')) : '';
+                $estadoRaw   = $columnaEstado !== null ? mb_strtolower($estadoTexto, 'UTF-8') : 'cerrada';
 
-                // Normaliza estados comunes sin inventar estados que no existan en la base.
-                if (in_array($estadoRaw, ['cerrada', 'cerrado', 'finalizada', 'finalizado', 'terminada', 'terminado', 'inactiva', 'inactivo'], true)) {
+                if (in_array($estadoRaw, ['cerrada', 'cerrado', 'finalizada', 'finalizado', 'terminada', 'inactiva'], true)) {
                     $estado = 'cerrada';
-                } elseif (in_array($estadoRaw, ['rechazada', 'rechazado', 'denegada', 'denegado'], true)) {
+                } elseif (in_array($estadoRaw, ['rechazada', 'rechazado', 'denegada'], true)) {
                     $estado = 'rechazada';
                 } elseif (in_array($estadoRaw, ['aceptada', 'aceptado', 'vigencia_concluida', 'vigencia_vencida'], true)) {
                     $estado = 'aceptada_vencida';
@@ -160,27 +157,41 @@ function cargar_convocatorias_depuracion(): array {
                 }
 
                 $registros[] = [
-                    'id' => $id,
-                    'categoria' => 'Convocatoria',
-                    'titulo' => (string) ($fila[$columnaTitulo] ?? 'Convocatoria'),
-                    'detalle' => 'Convocatoria registrada',
+                    'id'                => $id,
+                    'carrera_id'        => $columnaCarrera !== null ? (int) ($fila[$columnaCarrera] ?? 0) : null,
+                    'categoria'         => 'Convocatoria',
+                    'titulo'            => (string) ($fila[$columnaTitulo] ?? 'Convocatoria'),
+                    'detalle'           => 'Convocatoria registrada en BD',
                     'fecha_vencimiento' => substr($fecha, 0, 10),
-                    'estado' => $estado,
+                    'estado'            => $estado,
                 ];
             }
 
-            return ['tabla' => $tablaSegura, 'id' => $columnaId, 'registros' => $registros];
+            return [
+                'tabla'         => $tablaSegura,
+                'id'            => $colIdSeg,
+                'tiene_carrera' => $colCarrSeg !== null,
+                'registros'     => $registros,
+            ];
         } catch (\Throwable) {
         }
     }
 
-    return ['tabla' => null, 'id' => null, 'registros' => []];
+    return ['tabla' => null, 'id' => null, 'tiene_carrera' => false, 'registros' => []];
 }
 
-/** Elimina una convocatoria real en la tabla detectada y devuelve si la operación tuvo éxito. */
 function eliminar_convocatoria_depuracion(?string $tabla, ?string $columnaId, int $id): bool {
     if ($tabla === null || $columnaId === null || $id <= 0) {
         return false;
+    }
+
+    // Si existe la función oficial del módulo, la usamos primero para respetar cascadas o archivos
+    if (function_exists('bec_eliminar')) {
+        try {
+            bec_eliminar($id);
+            return true;
+        } catch (\Throwable) {
+        }
     }
 
     $conexion = conexion_becas_depuracion();
@@ -188,70 +199,50 @@ function eliminar_convocatoria_depuracion(?string $tabla, ?string $columnaId, in
         return false;
     }
 
-    $tablaSegura = identificador_sql_depuracion($tabla);
+    $tablaSegura   = identificador_sql_depuracion($tabla);
     $columnaSegura = identificador_sql_depuracion($columnaId);
     if ($tablaSegura === null || $columnaSegura === null) {
         return false;
     }
 
     try {
-        if ($conexion instanceof \PDO) {
-            $sentencia = $conexion->prepare(
-                'DELETE FROM `' . $tablaSegura . '` WHERE `' . $columnaSegura . '` = :id LIMIT 1'
-            );
-            $sentencia->execute(['id' => $id]);
-            return $sentencia->rowCount() === 1;
-        }
-
-        if (method_exists($conexion, 'prepare')) {
-            $sentencia = $conexion->prepare(
-                'DELETE FROM `' . $tablaSegura . '` WHERE `' . $columnaSegura . '` = ? LIMIT 1'
-            );
-            if ($sentencia === false) {
-                return false;
-            }
-            $sentencia->bind_param('i', $id);
-            $resultado = $sentencia->execute();
-            $eliminados = $sentencia->affected_rows;
-            $sentencia->close();
-            return $resultado && $eliminados === 1;
-        }
-    } catch (\Throwable) {
+        $sentencia = $conexion->prepare(
+            'DELETE FROM `' . $tablaSegura . '` WHERE `' . $columnaSegura . '` = :id LIMIT 1'
+        );
+        $sentencia->execute(['id' => $id]);
+        return $sentencia->rowCount() === 1;
+    } catch (\Throwable $e) {
+        error_log('Error al depurar convocatoria #' . $id . ': ' . $e->getMessage());
         return false;
     }
-
-    return false;
 }
 
-$datosConvocatorias = cargar_convocatorias_depuracion();
-$tablaConvocatorias = $datosConvocatorias['tabla'];
+$datosConvocatorias     = cargar_convocatorias_depuracion();
+$tablaConvocatorias     = $datosConvocatorias['tabla'];
 $columnaIdConvocatorias = $datosConvocatorias['id'];
-$registrosHistoricos = $datosConvocatorias['registros'];
+$registrosHistoricos    = $datosConvocatorias['registros'];
 
-$diasRaw = entero(get('dias')) ?? 60;
+$diasRaw       = entero(get('dias')) ?? 60;
 $diasRetencion = in_array($diasRaw, $diasPermitidos, true) ? $diasRaw : 60;
 
-$estadoRaw = trim((string) get('estado'));
+$estadoRaw    = trim((string) get('estado'));
 $filtroEstado = in_array($estadoRaw, $estadosPermitidos, true) ? $estadoRaw : '';
 
 $alerta = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // 2. Verificación anti-CSRF obligatoria
-    if (function_exists('verificar_token')) {
-        verificar_token();
-    }
+    verificar_token();
 
     $accion = (string) ($_POST['accion'] ?? '');
 
-    $diasPost = entero($_POST['dias_actuales'] ?? null) ?? 60;
+    $diasPost      = entero($_POST['dias_actuales'] ?? null) ?? 60;
     $diasRetencion = in_array($diasPost, $diasPermitidos, true) ? $diasPost : 60;
 
-    $estadoPost = trim((string) ($_POST['estado_actual'] ?? ''));
+    $estadoPost   = trim((string) ($_POST['estado_actual'] ?? ''));
     $filtroEstado = in_array($estadoPost, $estadosPermitidos, true) ? $estadoPost : '';
 
     if ($accion === 'eliminar_uno') {
-        $idEliminar = entero($_POST['id'] ?? null) ?? 0;
+        $idEliminar      = entero($_POST['id'] ?? null) ?? 0;
         $tituloEliminado = '';
 
         foreach ($registrosHistoricos as $idx => $item) {
@@ -260,8 +251,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             try {
-                $fechaVencimiento = new DateTime($item['fecha_vencimiento']);
-                $hoyValidacion = new DateTime('today');
+                $fechaVencimiento  = new DateTime($item['fecha_vencimiento']);
+                $hoyValidacion     = new DateTime('today');
                 $diasTranscurridos = ($fechaVencimiento < $hoyValidacion)
                     ? (int) $hoyValidacion->diff($fechaVencimiento)->days
                     : 0;
@@ -285,20 +276,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($tituloEliminado !== '') {
             $alerta = [
-                'tipo' => 'exito',
+                'tipo'   => 'exito',
                 'titulo' => 'Convocatoria eliminada',
-                'texto' => "Se eliminó «{$tituloEliminado}» de la base de datos.",
+                'texto'  => "Se eliminó «{$tituloEliminado}» de la base de datos.",
             ];
         } else {
             $alerta = [
-                'tipo' => 'error',
+                'tipo'   => 'error',
                 'titulo' => 'No fue posible eliminar',
-                'texto' => 'El registro no existe, no es elegible o la base de datos no permitió su eliminación.',
+                'texto'  => 'El registro no existe, no es elegible o tiene información vinculada en la base de datos.',
             ];
         }
     } elseif ($accion === 'eliminar_lote') {
         $rawSeleccion = is_array($_POST['seleccionados'] ?? null) ? $_POST['seleccionados'] : [];
-        // Filtramos solo enteros positivos válidos, eliminamos duplicados y limitamos el lote a 100 elementos
         $idsSeleccionados = array_slice(
             array_values(array_unique(array_filter(array_map('intval', $rawSeleccion), static fn(int $id): bool => $id > 0))),
             0,
@@ -307,13 +297,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (empty($idsSeleccionados)) {
             $alerta = [
-                'tipo' => 'alerta',
+                'tipo'   => 'alerta',
                 'titulo' => 'Sin selección válida',
-                'texto' => 'Selecciona al menos un registro vencido en la tabla para ejecutar la eliminación masiva.',
+                'texto'  => 'Selecciona al menos un registro vencido en la tabla para ejecutar la eliminación masiva.',
             ];
         } else {
             $eliminados = 0;
-            $hoyLote = new DateTime('today');
+            $hoyLote    = new DateTime('today');
 
             foreach ($registrosHistoricos as $idx => $item) {
                 if (!in_array($item['id'], $idsSeleccionados, true)) {
@@ -321,7 +311,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 try {
-                    $fechaVencimiento = new DateTime($item['fecha_vencimiento']);
+                    $fechaVencimiento  = new DateTime($item['fecha_vencimiento']);
                     $diasTranscurridos = ($fechaVencimiento < $hoyLote)
                         ? (int) $hoyLote->diff($fechaVencimiento)->days
                         : 0;
@@ -343,21 +333,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $alerta = [
-                'tipo' => $eliminados > 0 ? 'exito' : 'error',
+                'tipo'   => $eliminados > 0 ? 'exito' : 'error',
                 'titulo' => 'Eliminación por lote completada',
-                'texto' => $eliminados > 0
+                'texto'  => $eliminados > 0
                     ? "Se eliminaron {$eliminados} convocatoria(s) vencida(s) de la base de datos."
-                    : 'Ningún registro fue eliminado. Puede estar protegido o no ser elegible.',
+                    : 'Ningún registro fue eliminado. Puede tener solicitudes vinculadas o no ser elegible.',
             ];
         }
     }
 }
 
-$hoy = new DateTime('today');
+$hoy        = new DateTime('today');
 $candidatos = [];
 
 foreach ($registrosHistoricos as $item) {
-    $fechaVenc = new DateTime($item['fecha_vencimiento']);
+    $fechaVenc         = new DateTime($item['fecha_vencimiento']);
     $diasTranscurridos = ($fechaVenc < $hoy) ? (int) $hoy->diff($fechaVenc)->days : 0;
 
     if ($diasTranscurridos < $diasRetencion) {
@@ -368,7 +358,7 @@ foreach ($registrosHistoricos as $item) {
     }
 
     $item['dias_transcurridos'] = $diasTranscurridos;
-    $candidatos[] = $item;
+    $candidatos[]               = $item;
 }
 
 cabecera('Eliminación · Becas y apoyos', '', '../css/modulo.css');
@@ -385,7 +375,7 @@ cabecera('Eliminación · Becas y apoyos', '', '../css/modulo.css');
   </nav>
 
   <header class="fila fila--separada mb-6">
-    <h1 class="sin-margen">Eliminación de becas y expedientes por eliminación</h1>
+    <h1 class="sin-margen">Eliminación de convocatorias vencidas</h1>
     <a class="boton boton--secundario" href="index.php">Volver al listado</a>
   </header>
 
