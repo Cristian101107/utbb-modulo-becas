@@ -1,0 +1,204 @@
+/* ==========================================================================
+   MÓDULO BECAS · modulo.css
+   Explorador Vocacional UTBB
+   ========================================================================== */
+
+/* --- Vista pública y detalle (código del equipo) --- */
+.bec-portada {
+  padding-top: calc(var(--e7, 3rem) + 1rem);
+  padding-bottom: var(--e6, 2.5rem);
+}
+
+.bec-tarjeta {
+  border-top: 3px solid var(--marca-700);
+}
+
+.bec-etiqueta-tipo {
+  display: inline-block;
+  font-size: var(--t-xs, 0.78rem);
+  font-weight: var(--peso-fuerte, 600);
+  color: var(--marca-700);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: var(--e2);
+}
+
+.bec-monto {
+  font-family: var(--fuente-titulo);
+  font-size: var(--t-xl);
+  font-weight: var(--peso-fuerte);
+  color: var(--marca-700);
+  margin-bottom: var(--e3);
+}
+
+.bec-detalle-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--e5);
+  align-items: start;
+}
+
+.bec-lista-requisitos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e3);
+  padding-left: var(--e5);
+  margin-bottom: var(--e5);
+}
+
+.bec-contacto {
+  margin-top: var(--e6);
+  padding: var(--e4) var(--e5);
+  background-color: var(--superficie);
+  border: 1px solid var(--borde);
+  border-left: 3px solid var(--marca-700);
+  border-radius: var(--radio);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--e3);
+  font-size: var(--t-sm, 0.9rem);
+  color: var(--tinta-suave);
+}
+
+/* --- Postulación / solicitar.php (código del equipo) --- */
+.bec-formulario {
+  max-width: 760px;
+}
+
+.bec-fila {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0 var(--e4);
+}
+
+@media (min-width: 600px) {
+  .bec-fila {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+}
+
+/* --- Panel administrativo y eliminación (integración admin/) --- */
+.becas-herramientas {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--e2);
+}
+
+.becas-etiqueta-plantilla {
+  font-size: var(--t-xs);
+  font-weight: var(--peso-fuerte);
+  color: var(--texto-suave);
+}
+
+/* Reseteos semánticos para <fieldset> y <menu> sin alterar ev-base.css */
+.becas-fieldset {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--e4);
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+menu.tabla__acciones {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+menu.tabla__acciones li {
+  display: inline-flex;
+  margin: 0;
+}
+
+/* Filtros en barra administrativa */
+.becas-campo-busqueda {
+  flex: 1 1 240px;
+}
+
+.becas-campo-filtro {
+  flex: 0 1 220px;
+}
+
+/* Rejillas del editor de convocatorias */
+.becas-grid {
+  display: grid;
+  gap: var(--e4);
+}
+
+.becas-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.becas-grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Badges de estado (<mark class="beca-estado">) */
+.beca-estado {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--e3);
+  border-radius: var(--radio-pastilla);
+  font-size: var(--t-xs);
+  font-weight: var(--peso-fuerte);
+  white-space: nowrap;
+}
+
+.beca-estado--activa {
+  background-color: var(--exito-fondo);
+  color: var(--exito);
+}
+
+.beca-estado--proxima,
+.beca-estado--aceptada_vencida {
+  background-color: var(--marca-100);
+  color: var(--marca-700);
+}
+
+.beca-estado--cerrada,
+.beca-estado--borrador {
+  background-color: var(--superficie);
+  color: var(--texto-suave);
+  border: 1px solid var(--borde);
+}
+
+.beca-estado--rechazada {
+  background-color: var(--error-fondo);
+  color: var(--error);
+}
+
+.beca-col-check {
+  width: 36px;
+  text-align: center;
+}
+
+/* --- Tablet y Celular (menor a 900px) --- */
+@media (max-width: 899px) {
+  .bec-detalle-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .becas-herramientas {
+    width: 100%;
+  }
+
+  .becas-herramientas .boton,
+  .becas-fieldset .boton {
+    width: 100%;
+  }
+
+  .becas-campo-busqueda,
+  .becas-campo-filtro {
+    flex: 1 1 100%;
+  }
+
+  .becas-grid--2,
+  .becas-grid--3 {
+    grid-template-columns: 1fr;
+  }
+}
