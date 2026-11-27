@@ -16,42 +16,42 @@ if (file_exists(__DIR__ . '/../includes/consultas.php')) {
 
 const CARPETA_SUBIDAS = __DIR__ . '/../uploads';
 
-$categoriasPermitidas = [
-    'Mérito Académico',
-    'Socioeconómica',
-    'Movilidad',
-    'Investigación',
-    'Deportiva / Cultural',
+$categoriasPermitidas = defined('BEC_TIPOS') ? BEC_TIPOS : [
+    'academica'      => 'Académica',
+    'socioeconomica' => 'Socioeconómica',
+    'deportiva'      => 'Apoyo Extracurricular',
+    'cultural'       => 'Cultural',
+    'transporte'     => 'Transporte',
+    'alimenticia'    => 'Alimenticia',
+    'federal'        => 'Programa Federal',
 ];
 
-$estadosPermitidos = defined('BEC_ESTADOS')
-    ? BEC_ESTADOS
-    : (defined('PLT_ESTADOS') ? PLT_ESTADOS : [
-        'borrador' => 'Borrador',
-        'proxima'  => 'Próxima',
-        'activa'   => 'Activa',
-        'cerrada'  => 'Cerrada',
-    ]);
+$estadosPermitidos = defined('BEC_ESTADOS') ? BEC_ESTADOS : [
+    'activa'   => 'Activa',
+    'proxima'  => 'Próxima',
+    'borrador' => 'Borrador',
+    'cerrada'  => 'Cerrada',
+];
 
 $plantillasBase = [
     'estandar' => [
         'titulo'     => 'Convocatoria Institucional de Apoyo Estudiantil 2026',
-        'tipo'       => 'Socioeconómica',
+        'tipo'       => 'socioeconomica',
         'monto'      => '$3,000.00 MXN / cuatrimestre',
         'apertura'   => date('Y-m-d'),
         'cierre'     => date('Y-m-d', strtotime('+20 days')),
-        'estado'     => array_key_exists('proxima', $estadosPermitidos) ? 'proxima' : array_key_first($estadosPermitidos),
+        'estado'     => 'activa',
         'resumen'    => 'Apoyo económico cuatrimestral dirigido a estudiantes con necesidad socioeconómica comprobable.',
         'requisitos' => "- Estar inscrito en el periodo escolar vigente.\n- Promedio mínimo de 8.0 sin adeudos administrativos.\n- Solicitud firmada y copia de identificación oficial.\n- Comprobante de ingresos familiares reciente.",
         'cuerpo'     => 'Consulta las bases completas y entrega tu expediente digital dentro de las fechas establecidas.',
     ],
     'excelencia' => [
         'titulo'     => 'Beca al Mérito y Rendimiento Académico 2026',
-        'tipo'       => 'Mérito Académico',
+        'tipo'       => 'academica',
         'monto'      => '$5,000.00 MXN / cuatrimestre',
         'apertura'   => date('Y-m-d'),
         'cierre'     => date('Y-m-d', strtotime('+15 days')),
-        'estado'     => array_key_exists('proxima', $estadosPermitidos) ? 'proxima' : array_key_first($estadosPermitidos),
+        'estado'     => 'activa',
         'resumen'    => 'Reconocimiento económico al desempeño académico sobresaliente de estudiantes regulares.',
         'requisitos' => "- Promedio mínimo de 9.5 en el ciclo inmediato anterior.\n- Haber cursado la carga académica completa.\n- Carta de exposición de motivos.",
         'cuerpo'     => 'El comité evaluador validará el historial académico oficial emitido por Servicios Escolares.',
@@ -87,16 +87,14 @@ if ($registro !== null && isset($registro['carrera_id']) && $registro['carrera_i
     requerir_carrera((int) $registro['carrera_id']);
 }
 
-$estadoDefecto = array_key_exists('proxima', $estadosPermitidos) ? 'proxima' : (string) array_key_first($estadosPermitidos);
-
 $datos = [
     'carrera_id' => $registro['carrera_id'] ?? (carrera_del_usuario() ?? ''),
     'titulo'     => $registro['titulo']     ?? '',
-    'tipo'       => $registro['tipo']       ?? $registro['categoria'] ?? 'Mérito Académico',
+    'tipo'       => $registro['tipo']       ?? 'academica',
     'monto'      => $registro['monto']      ?? '',
-    'apertura'   => $registro['apertura']   ?? $registro['fecha_apertura'] ?? '',
-    'cierre'     => $registro['cierre']     ?? $registro['fecha_cierre']   ?? '',
-    'estado'     => $registro['estado']     ?? $estadoDefecto,
+    'apertura'   => $registro['apertura']   ?? '',
+    'cierre'     => $registro['cierre']     ?? '',
+    'estado'     => $registro['estado']     ?? 'activa',
     'resumen'    => $registro['resumen']    ?? '',
     'requisitos' => $registro['requisitos'] ?? '',
     'cuerpo'     => $registro['cuerpo']     ?? '',
@@ -109,7 +107,7 @@ $alertaInfo = null;
 $plantillaSolicitada = trim((string) get('plantilla'));
 if ($registro === null && $plantillaSolicitada !== '' && array_key_exists($plantillaSolicitada, $plantillasBase)) {
     $datos = array_merge($datos, $plantillasBase[$plantillaSolicitada]);
-    $alertaInfo = 'Plantilla base cargada. Ajusta montos, fechas o requisitos antes de guardar.';
+    $alertaInfo = 'Plantilla base cargada. Ajusta los datos antes de guardar en la base de datos.';
 }
 
 $validarFechaIso = static function (string $fecha): bool {
@@ -134,11 +132,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $datos['requisitos'] = $limpiar((string) post('requisitos'));
     $datos['cuerpo']     = $limpiar((string) post('cuerpo'));
 
-    // Alias por si consultas.php espera los nombres con prefijo fecha_ o categoria
-    $datos['categoria']      = $datos['tipo'];
-    $datos['fecha_apertura'] = $datos['apertura'];
-    $datos['fecha_cierre']   = $datos['cierre'];
-
     if ($datos['carrera_id'] === null || carrera($datos['carrera_id']) === null) {
         $errores['carrera_id'] = 'Selecciona una carrera válida.';
     } else {
@@ -151,7 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errores['titulo'] = 'El título no puede pasar de 160 caracteres.';
     }
 
-    if (!in_array($datos['tipo'], $categoriasPermitidas, true)) {
+    if (!array_key_exists($datos['tipo'], $categoriasPermitidas)) {
         $errores['tipo'] = 'Selecciona una categoría de beca válida.';
     }
 
@@ -197,16 +190,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($registro === null) {
                 if ($fnCrear === null) {
-                    throw new RuntimeException('No está disponible bec_crear() ni plt_crear() en consultas.php.');
+                    throw new RuntimeException('No está disponible bec_crear() en consultas.php.');
                 }
                 $fnCrear($datos, usuario()['id']);
-                mensaje('exito', 'Convocatoria creada correctamente.');
+                mensaje('exito', 'Convocatoria guardada correctamente en la base de datos.');
             } else {
                 if ($fnActualizar === null) {
-                    throw new RuntimeException('No está disponible bec_actualizar() ni plt_actualizar() en consultas.php.');
+                    throw new RuntimeException('No está disponible bec_actualizar() en consultas.php.');
                 }
                 $fnActualizar((int) $registro['id'], $datos);
-                mensaje('exito', 'Cambios guardados correctamente.');
+                mensaje('exito', 'Cambios actualizados correctamente.');
             }
 
             if ($imagenNueva !== null && $imagenAnterior && $imagenAnterior !== $imagenNueva) {
@@ -309,8 +302,8 @@ cabecera($registro ? 'Editar convocatoria' : 'Nueva convocatoria', '', '../css/m
             Categoría <span class="campo__requerido" aria-hidden="true">*</span>
           </label>
           <select class="campo__control" id="tipo" name="tipo">
-            <?php foreach ($categoriasPermitidas as $cat): ?>
-              <option value="<?= e($cat) ?>" <?= $datos['tipo'] === $cat ? 'selected' : '' ?>><?= e($cat) ?></option>
+            <?php foreach ($categoriasPermitidas as $clave => $etiqueta): ?>
+              <option value="<?= e((string) $clave) ?>" <?= $datos['tipo'] === $clave ? 'selected' : '' ?>><?= e((string) $etiqueta) ?></option>
             <?php endforeach; ?>
           </select>
           <?php if (isset($errores['tipo'])): ?>

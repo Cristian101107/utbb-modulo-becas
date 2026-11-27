@@ -48,23 +48,17 @@ function identificador_sql_depuracion(string $identificador): ?string {
 }
 
 function tablas_convocatorias_depuracion(\PDO $conexion): array {
-    $candidatas = [];
+    $candidatas = ['bec_programas'];
 
     try {
         $filas = $conexion->query('SHOW TABLES')?->fetchAll(\PDO::FETCH_COLUMN) ?: [];
         foreach ($filas as $tabla) {
             $nombre = strtolower((string) $tabla);
-            if (str_contains($nombre, 'convocatoria') || str_starts_with($nombre, 'bec_')) {
+            if ((str_contains($nombre, 'convocatoria') || str_starts_with($nombre, 'bec_')) && !in_array($tabla, $candidatas, true)) {
                 $candidatas[] = (string) $tabla;
             }
         }
     } catch (\Throwable) {
-    }
-
-    foreach (['bec_convocatorias', 'convocatorias', 'becas_convocatorias', 'bec_becas'] as $tabla) {
-        if (!in_array($tabla, $candidatas, true)) {
-            $candidatas[] = $tabla;
-        }
     }
 
     return $candidatas;
