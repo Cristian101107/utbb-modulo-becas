@@ -13,15 +13,15 @@ $programas = bec_listar_programas($q, $tipo, $modalidad);
 cabecera('Catálogo de Becas y Apoyos', '', 'css/modulo.css');
 ?>
 
-<section class="portada bec-portada">
+<header class="portada bec-portada">
   <div class="contenedor">
     <span class="insignia insignia--info mb-4">Convocatorias UTBB</span>
     <h1>Becas y Apoyos Estudiantiles</h1>
     <p class="entradilla">Programas institucionales disponibles a partir de 2do. cuatrimestre como descuento en colegiatura y apoyos federales vigentes.</p>
   </div>
-</section>
+</header>
 
-<section class="contenedor seccion">
+<main class="contenedor seccion">
   <?php pintar_mensajes(); ?>
 
   <div class="disposicion-filtros">
@@ -38,11 +38,9 @@ cabecera('Catálogo de Becas y Apoyos', '', 'css/modulo.css');
         <label class="campo__etiqueta" for="tipo">Tipo de beca</label>
         <select class="campo__control" id="tipo" name="tipo">
           <option value="">Todos los tipos</option>
-          <option value="academica" <?= $tipo === 'academica' ? 'selected' : '' ?>>Académica</option>
-          <option value="socioeconomica" <?= $tipo === 'socioeconomica' ? 'selected' : '' ?>>Socioeconómica</option>
-          <option value="deportiva" <?= $tipo === 'deportiva' ? 'selected' : '' ?>>Apoyo Extracurricular</option>
-          <option value="alimenticia" <?= $tipo === 'alimenticia' ? 'selected' : '' ?>>Alimenticia</option>
-          <option value="federal" <?= $tipo === 'federal' ? 'selected' : '' ?>>Federal (Benito Juárez)</option>
+          <?php foreach (BEC_TIPOS as $claveTipo => $etiquetaTipo): ?>
+            <option value="<?= e($claveTipo) ?>" <?= $tipo === $claveTipo ? 'selected' : '' ?>><?= e($etiquetaTipo) ?></option>
+          <?php endforeach; ?>
         </select>
       </div>
 
@@ -63,7 +61,7 @@ cabecera('Catálogo de Becas y Apoyos', '', 'css/modulo.css');
       <a class="boton boton--secundario boton--bloque mt-4" href="seguimiento.php">Seguimiento de solicitud</a>
     </form>
 
-    <div>
+    <section aria-label="Listado de programas">
       <p class="leyenda">Mostrando <?= count($programas) ?> programa(s) de apoyo disponibles</p>
 
       <?php if (empty($programas)): ?>
@@ -74,12 +72,13 @@ cabecera('Catálogo de Becas y Apoyos', '', 'css/modulo.css');
         <div class="rejilla">
           <?php foreach ($programas as $p): ?>
             <?php
-              $esFederal = ($p['tipo'] === 'federal');
-              $etiquetaTipo = $esFederal ? 'Programa Federal' : 'Beca Institucional';
-              $claseEstado  = $esFederal ? 'insignia--info' : 'insignia--publicado';
-              $textoEstado  = $esFederal ? 'Federal' : 'Abierta';
+              $esFederal    = ($p['tipo'] === 'federal');
+              $etiquetaTipo = $esFederal ? 'Programa Federal' : (BEC_TIPOS[$p['tipo']] ?? 'Beca Institucional');
+              $esProxima    = (($p['estado'] ?? 'activa') === 'proxima');
+              $claseEstado  = $esProxima ? 'insignia--aviso' : ($esFederal ? 'insignia--info' : 'insignia--publicado');
+              $textoEstado  = $esProxima ? 'Próxima' : ($esFederal ? 'Federal' : 'Activa');
             ?>
-            <a class="tarjeta bec-tarjeta" href="ficha.php?id=<?= (int)$p['id'] ?>">
+            <a class="tarjeta bec-tarjeta" href="ficha.php?id=<?= (int) $p['id'] ?>">
               <div class="tarjeta__cuerpo">
                 <span class="bec-etiqueta-tipo"><?= e($etiquetaTipo) ?></span>
                 <h3 class="tarjeta__titulo"><?= e($p['nombre']) ?></h3>
@@ -95,15 +94,15 @@ cabecera('Catálogo de Becas y Apoyos', '', 'css/modulo.css');
         </div>
       <?php endif; ?>
 
-      <div class="bec-contacto">
+      <footer class="bec-contacto">
         <span><strong>Atención:</strong> Edificio de Biblioteca</span>
         <span><strong>Teléfono:</strong> (+52) 322 226 8300 Ext. 1502</span>
         <span><strong>Correo:</strong> becas@utbb.edu.mx</span>
-      </div>
-    </div>
+      </footer>
+    </section>
 
   </div>
-</section>
+</main>
 
 <?php
 pie();
